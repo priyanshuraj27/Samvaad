@@ -1,0 +1,107 @@
+import { DebateSession } from "../models/debate.models.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { ApiError } from "../utils/ApiError.js";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// Create a new debate session
+const createSession = asyncHandler(async (req, res) => {
+  const { title, debateType, motion, userRole, participants } = req.body;
+
+  const session = await DebateSession.create({
+    title,
+    debateType,
+    motion,
+    user: req.user._id,
+    userRole,
+    participants,
+  });
+
+  return res.status(201).json(new ApiResponse(201, session, "Debate session created"));
+});
+
+// Get all sessions for the logged-in user
+const getAllSessions = asyncHandler(async (req, res) => {
+  const sessions = await DebateSession.find({ user: req.user._id }).sort({ createdAt: -1 });
+  return res.status(200).json(new ApiResponse(200, sessions, "Sessions fetched"));
+});
+
+// Get a specific session by ID
+const getSessionById = asyncHandler(async (req, res) => {
+  const session = await DebateSession.findById(req.params.id);
+  if (!session) throw new ApiError(404, "Session not found");
+  return res.status(200).json(new ApiResponse(200, session, "Session fetched"));
+});
+
+// Update a session (e.g., add transcript, adjudication)
+const updateSession = asyncHandler(async (req, res) => {
+  const updated = await DebateSession.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  if (!updated) throw new ApiError(404, "Session not found");
+  return res.status(200).json(new ApiResponse(200, updated, "Session updated"));
+});
+
+// Delete a session
+const deleteSession = asyncHandler(async (req, res) => {
+  const deleted = await DebateSession.findByIdAndDelete(req.params.id);
+  if (!deleted) throw new ApiError(404, "Session not found");
+  return res.status(200).json(new ApiResponse(200, {}, "Session deleted"));
+});
+
+// Generate AI speech for a speaker
+const generateAISpeech = asyncHandler(async (req, res) => {
+  const { speakerRole, motion } = req.body;
+
+  if (!speakerRole || !motion) {
+    throw new ApiError(400, "Speaker role and motion are required");
+  }
+
+  const prompt = `
+You are an AI debater playing the role of "${speakerRole}" in a "${req.body.debateType}" format debate.
+Debate Motion: "${motion}"
+
+Generate a compelling, structured, formal speech (approx 7 mins in length).
+Avoid repetition, stay relevant, and use standard parliamentary tone.
+`;
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const aiSpeech = response.text();
+
+  return res.status(200).json(new ApiResponse(200, { text: aiSpeech }, "AI speech generated"));
+});
+const generatePOI = asyncHandler(async (req, res) => {
+  const { targetSpeakerRole, currentSpeech, motion } = req.body;
+
+  if (!targetSpeakerRole || !currentSpeech || !motion) {
+    throw new ApiError(400, "Required fields: targetSpeakerRole, currentSpeech, motion");
+  }
+
+  const prompt = `
+You are an AI debater listening to the speech of "${targetSpeakerRole}" in a parliamentary debate on the motion:
+"${motion}".
+
+The speaker just said:
+"${currentSpeech}"
+
+Generate a short and sharp Point of Information (POI) — a question or rebuttal that challenges the logic or assumptions of the argument. Keep it under 2 sentences. No explanation, just the POI itself.
+`;
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const poi = response.text().trim();
+
+  return res.status(200).json(new ApiResponse(200, { poi }, "POI generated"));
+});
+export {
+  createSession,
+  getAllSessions,
+  getSessionById,
+  updateSession,
+  deleteSession,
+  generateAISpeech,
+  generatePOI,
+};
