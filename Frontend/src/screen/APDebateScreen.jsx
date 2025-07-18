@@ -1,789 +1,557 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useLocation, Link, useNavigate, Routes, Route } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import {
-  Timer,
-  Play,
-  Pause,
-  SkipForward,
-  Info,
-  ChevronUp,
-  ChevronDown,
-  MessageSquare,
-  RotateCcw,
-  Zap,
-  Mic,
-  Speaker,
-  Hand,
-  Check,
-  X,
-  BookOpen,
-  Settings, // For Setup Screen icon
+    Timer,
+    Play,
+    Pause,
+    SkipForward,
+    Info,
+    Mic,
+    Hand,
+    Shield,
+    BookOpen,
+    ArrowLeft,
+    User,
+    X as XIcon,
+    Speaker as SpeakerIcon,
+    SendHorizonal,
+    Bell,
+    Check,
+    X,
 } from 'lucide-react';
 
-// Helper to get minutes from a string like "7 minutes"
-const getMinutesFromString = (timeString) => {
-  const match = timeString.match(/\d+/);
-  return match ? parseInt(match[0], 10) : 0;
-};
+// --- TONE.JS SETUP ---
+// Make sure to include Tone.js in your HTML file:
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+const synth = window.Tone ? new window.Tone.Synth().toDestination() : null;
 
-// Helper to safely display content that *might* be an object and needs stringifying, or is already a string
-const safeDisplay = (content) => {
-  if (typeof content === 'object' && content !== null) {
-    try {
-      return JSON.stringify(content);
-    } catch (e) {
-      return 'Invalid Object';
+const playBell = (note = "C5", count = 1, interval = 0.2) => {
+    if (window.Tone && synth && window.Tone.context.state === 'running') {
+        const now = window.Tone.now();
+        for (let i = 0; i < count; i++) {
+            synth.triggerAttackRelease(note, "8n", now + i * interval);
+        }
     }
-  }
-  return content;
 };
 
+// --- BROWSER API CHECK ---
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+if (recognition) {
+    recognition.continuous = true;
+    recognition.interimResults = true;
+}
+
+// --- HELPER FUNCTIONS ---
+const getMinutesFromString = (timeString = "0 minutes") => {
+    const match = timeString.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 0;
+};
+
+const safeDisplay = (content) => {
+    if (typeof content === 'object' && content !== null) {
+        try {
+            return JSON.stringify(content);
+        } catch (e) {
+            return 'Invalid Object';
+        }
+    }
+    return content;
+};
+
+// --- MODIFICATION: Default setup data for demo purposes ---
+const demoDebateSetup = {
+    motion: "This House Believes That Artificial Intelligence Poses a Threat to Humanity",
+    userRole: "Prime Minister (You)",
+    formatDetails: {
+        name: 'Asian Parliamentary (AP)',
+        teams: '2 teams of 3 speakers each, plus a reply speech from each side',
+        structure: 'Government and Opposition benches',
+        prepTime: '15 minute prep time',
+        speechTime: '7-minute speeches',
+        rules: [
+            'Two teams: Government and Opposition.',
+            '7-minute speeches for constructive and whip roles.',
+            '4-minute reply speeches.',
+            'Points of Information (POIs) are allowed during the middle 5 minutes of constructive speeches.',
+            'Reply speeches are a summary and cannot introduce new arguments.'
+        ],
+        speakerRolesDetailed: [
+             { role: "Prime Minister", description: "Defines the motion, outlines the Government's case." },
+             { role: "Leader of Opposition", description: "Rebuts the PM, presents Opposition's case." },
+             { role: "Deputy Prime Minister", description: "Rebuts DLO and rebuilds Government case." },
+             { role: "Deputy Leader of Opposition", description: "Rebuts DPM and rebuilds Opposition case." },
+             { role: "Government Whip", description: "Summarizes the debate from a Government perspective." },
+             { role: "Opposition Whip", description: "Summarizes the debate from an Opposition perspective." },
+             { role: "Government Reply", description: "Provides a concluding, biased summary for the Government." },
+             { role: "Opposition Reply", description: "Provides a concluding, biased summary for the Opposition." },
+        ]
+    },
+};
+
+
+// --- REUSABLE UI COMPONENTS ---
+const TeamPanel = ({ teamName, speakers, currentSpeaker, userRole, teamColor, speakingAi }) => {
+    const colorClasses = {
+        'gov': 'border-blue-500/50',
+        'opp': 'border-red-500/50',
+    };
+    const highlightClasses = {
+        'gov': 'bg-blue-600/30 border-blue-400 shadow-blue-500/50 shadow-lg',
+        'opp': 'bg-red-600/30 border-red-400 shadow-red-500/50 shadow-lg',
+    }
+
+    return (
+        <div className={`bg-gray-800/50 rounded-2xl border ${colorClasses[teamColor]} p-4 flex flex-col gap-3`}>
+            <h3 className="text-center font-bold text-lg text-white">{teamName}</h3>
+            {speakers.map((speaker, index) => {
+                const isCurrentUser = speaker.role === userRole;
+                const isCurrentSpeaker = speaker.role === currentSpeaker?.role;
+                const isSpeakingAi = speakingAi === speaker.role;
+
+                return (
+                    <div key={index} className={`p-3 rounded-lg border-2 transition-all duration-300 ${isCurrentSpeaker ? highlightClasses[teamColor] : 'bg-gray-900/50 border-transparent'}`}>
+                        <div className="flex items-center justify-between">
+                           <span className="font-semibold text-gray-200">{speaker.role}</span>
+                            <div className="flex items-center gap-2">
+                                {isSpeakingAi && <SpeakerIcon className="w-5 h-5 text-yellow-300 animate-pulse" />}
+                                {isCurrentUser && <User className="w-5 h-5 text-emerald-400" />}
+                            </div>
+                        </div>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
 
 // --- APDebateScreen Component ---
 const APDebateScreen = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const debateSetup = location.state;
+    const location = useLocation();
+    const navigate = useNavigate();
+    // --- MODIFICATION: Use demo data as a fallback if no state is passed ---
+    const debateSetup = location.state || demoDebateSetup;
 
-  const [currentMotion, setCurrentMotion] = useState('');
-  const [userRole, setUserRole] = useState('');
+    const [speakerOrder, setSpeakerOrder] = useState([]);
+    const [currentSpeakerIndex, setCurrentSpeakerIndex] = useState(-1);
+    const [isPrepTime, setIsPrepTime] = useState(true);
+    const [timer, setTimer] = useState(0);
+    const [isActive, setIsActive] = useState(false);
+    const timerRef = useRef(null);
+    const [speechDuration, setSpeechDuration] = useState(0);
+    const protectedTimeDuration = 60;
 
-  const [speakerOrder, setSpeakerOrder] = useState([]);
-  const [currentSpeakerIndex, setCurrentSpeakerIndex] = useState(0);
-  const [isPrepTime, setIsPrepTime] = useState(true);
-  const [timer, setTimer] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-  const timerRef = useRef(null);
-  const [speechDuration, setSpeechDuration] = useState(0);
-  const protectedTimeDuration = 60; // 1 minute at the start and end of speeches
+    const [transcript, setTranscript] = useState([]);
+    const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
-  const [showRules, setShowRules] = useState(false);
-  const [showRoles, setShowRoles] = useState(false);
+    // Voice and Text Input state
+    const [isListening, setIsListening] = useState(false);
+    const [finalTranscript, setFinalTranscript] = useState('');
+    const [interimTranscript, setInterimTranscript] = useState('');
+    const [speakingAi, setSpeakingAi] = useState(null);
+    const [manualInputText, setManualInputText] = useState('');
 
-  const [userPoiAvailability, setUserPoiAvailability] = useState(false);
-  const [aiPoiOfferActive, setAiPoiOfferActive] = useState(false);
-  const [aiOfferingPoiRole, setAiOfferingPoiRole] = useState(null);
+    // POI State from original AP Screen
+    const [aiPoiOfferActive, setAiPoiOfferActive] = useState(false);
+    const [aiOfferingPoiRole, setAiOfferingPoiRole] = useState(null);
+    
+    // Refs to prevent race conditions and unwanted side effects
+    const hasProcessedTranscript = useRef(false);
+    const isNavigatingNext = useRef(false);
+    const transcriptEndRef = useRef(null);
 
-  // State for transcript and user input
-  const [transcript, setTranscript] = useState([]);
-  const [userSpeechInput, setUserSpeechInput] = useState('');
-  const transcriptEndRef = useRef(null); // Ref for auto-scrolling transcript
+    const addTranscriptEntry = useCallback((speaker, text, type = 'speech') => {
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setTranscript((prev) => [...prev, { speaker, text, timestamp, type }]);
+    }, []);
 
-  // Helper to add entries to the transcript
-  const addTranscriptEntry = useCallback((speaker, text, type = 'speech') => {
-    const now = new Date();
-    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setTranscript((prev) => [...prev, { speaker, text, timestamp, type }]);
-  }, []);
-
-  useEffect(() => {
-    if (transcriptEndRef.current) {
-      transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [transcript]);
-
-
-  useEffect(() => {
-    if (debateSetup) {
-      console.log("Debate Setup Received in AP Debate Screen:", debateSetup);
-      setCurrentMotion(debateSetup.motion);
-      setUserRole(debateSetup.userRole);
-
-      const format = debateSetup.formatDetails;
-      // Use the correct AP speaker order and teams
-      const apSpeakerOrder = [
-        { role: 'Prime Minister', team: 'Opening Government' },
-        { role: 'Leader of Opposition', team: 'Opening Opposition' },
-        { role: 'Deputy Prime Minister', team: 'Opening Government' },
-        { role: 'Deputy Leader of Opposition', team: 'Opening Opposition' },
-        { role: 'Member of Government', team: 'Closing Government' },
-        { role: 'Member of Opposition', team: 'Closing Opposition' },
-        { role: 'Government Whip', team: 'Closing Government' },
-        { role: 'Opposition Whip', team: 'Closing Opposition' },
-      ];
-      setSpeakerOrder(apSpeakerOrder);
-      console.log("AP Speaker Order:", apSpeakerOrder);
-
-      const prepMinutes = getMinutesFromString(debateSetup.formatDetails.prepTime);
-      const speechMinutes = getMinutesFromString(debateSetup.formatDetails.speechTime);
-      setTimer(prepMinutes * 60);
-      setSpeechDuration(speechMinutes * 60);
-
-      setAiPoiOfferActive(false);
-      setAiOfferingPoiRole(null);
-      setUserPoiAvailability(false);
-
-      // Initialize transcript with motion
-      addTranscriptEntry('Moderator', `The motion for today's debate is: "${safeDisplay(debateSetup.motion)}".`, 'info');
-
-    } else {
-      console.warn("No debate setup found for AP Debate Screen. Redirecting to setup.");
-      toast.error("No debate setup found. Redirecting to setup screen.", {
-        duration: 3000,
-        position: 'top-center',
-      });
-      setTimeout(() => navigate('/'), 3000);
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [debateSetup, navigate, addTranscriptEntry]);
-
-
-  useEffect(() => {
-    if (!debateSetup || (timer === 0 && !isActive && !isPrepTime && currentSpeakerIndex === 0 && speakerOrder.length > 0)) {
-      return;
-    }
-
-    if (isActive && timer > 0) {
-      timerRef.current = setInterval(() => {
-        setTimer((prevTime) => prevTime - 1);
-      }, 1000);
-    } else if (timer === 0 && isActive) {
-      clearInterval(timerRef.current);
-      setIsActive(false);
-      setAiPoiOfferActive(false);
-      setAiOfferingPoiRole(null);
-
-      if (isPrepTime) {
-        toast.success("Prep time is over! The debate is about to begin.", {
-          duration: 4000,
-          position: 'top-center',
-          icon: '🚀',
-        });
-        addTranscriptEntry('Moderator', 'Preparation time has ended. The debate is about to begin.');
-        setIsPrepTime(false);
-        setTimer(speechDuration);
-        if (speakerOrder.length > 0) {
-          setIsActive(true);
-          // Add AI's initial speech if it's their turn
-          const currentSpeaker = speakerOrder[currentSpeakerIndex];
-          const userRoleBase = userRole.split(' (')[0];
-          if (currentSpeaker && currentSpeaker.role !== userRoleBase) {
-            addTranscriptEntry(safeDisplay(currentSpeaker.role), `(Simulated AI Speech) Good evening, everyone. I stand here as the ${safeDisplay(currentSpeaker.role)} to begin our arguments on this motion.`, 'speech');
-          }
+    useEffect(() => {
+        if (isNavigatingNext.current) {
+            isNavigatingNext.current = false;
+        } else {
+            transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
-        setUserPoiAvailability(false);
-      } else {
-        toast('Speech time is over!', {
-          icon: '🔔',
-          duration: 3000,
-          position: 'top-right',
-        });
-        addTranscriptEntry(currentSpeaker?.role || 'Speaker', 'Speech time has concluded.', 'info');
+    }, [transcript]);
 
-        if (currentSpeakerIndex === speakerOrder.length - 1) {
-          handleDebateConcluded();
+    // Initialize debate setup
+    useEffect(() => {
+        // --- MODIFICATION: This effect now always runs with valid setup data ---
+        const formatDetails = debateSetup.formatDetails;
+        const apSpeakerOrder = [
+            { role: 'Prime Minister', team: 'Government' },
+            { role: 'Leader of Opposition', team: 'Opposition' },
+            { role: 'Deputy Prime Minister', team: 'Government' },
+            { role: 'Deputy Leader of Opposition', team: 'Opposition' },
+            { role: 'Government Whip', team: 'Government' },
+            { role: 'Opposition Whip', team: 'Opposition' },
+            { role: 'Government Reply', team: 'Government' },
+            { role: 'Opposition Reply', team: 'Opposition' },
+        ];
+        setSpeakerOrder(apSpeakerOrder);
+
+        const prepMinutes = getMinutesFromString(formatDetails.prepTime);
+        const speechMinutes = getMinutesFromString(formatDetails.speechTime);
+        setTimer(prepMinutes * 60);
+        setSpeechDuration(speechMinutes * 60);
+
+        addTranscriptEntry('Moderator', `The AP debate motion is: "${safeDisplay(debateSetup.motion)}".`, 'info');
+        
+        if (!recognition) {
+            toast.error("Your browser does not support Speech Recognition. Please use Chrome or Edge.", { duration: 5000 });
         }
-      }
-    }
+        
+        return () => clearInterval(timerRef.current);
+    }, [debateSetup, addTranscriptEntry]);
 
-    return () => {
-      if (timerRef.current) {
+    const handleDebateConcluded = useCallback(() => {
+        addTranscriptEntry('Moderator', 'The debate has concluded. All speeches are complete.', 'info');
+        setCurrentSpeakerIndex(-1);
+        toast.success("Debate Concluded!");
+    }, [addTranscriptEntry]);
+
+    const speak = useCallback((text, speaker) => {
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.onstart = () => setSpeakingAi(speaker);
+            utterance.onend = () => setSpeakingAi(null);
+            window.speechSynthesis.speak(utterance);
+        } else {
+            toast.error("Your browser does not support Text-to-Speech.");
+        }
+    }, []);
+
+    const stopListening = useCallback(() => {
+        if (recognition) {
+            recognition.stop();
+        }
+    }, []);
+
+    const handleNextSpeaker = useCallback((isFirstSpeaker = false) => {
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            setSpeakingAi(null);
+        }
+
+        if (isListening) {
+            hasProcessedTranscript.current = true;
+            stopListening();
+        }
+
         clearInterval(timerRef.current);
-      }
+        isNavigatingNext.current = true;
+
+        if (isPrepTime) {
+            toast.success("Prep time is over! The debate begins.", { icon: '🚀' });
+            addTranscriptEntry('Moderator', 'Preparation time has ended. The debate begins.');
+            setIsPrepTime(false);
+        }
+
+        const nextIndex = isFirstSpeaker ? 0 : currentSpeakerIndex + 1;
+
+        if (nextIndex < speakerOrder.length) {
+            setCurrentSpeakerIndex(nextIndex);
+            setTimer(speechDuration);
+            setIsActive(true);
+            const nextSpeaker = speakerOrder[nextIndex];
+            toast.success(`Next up: ${safeDisplay(nextSpeaker?.role)}!`, { icon: '➡️' });
+            if (debateSetup && nextSpeaker?.role !== debateSetup.userRole.split(' (')[0]) {
+                const aiSpeech = `(Simulated AI Speech for ${safeDisplay(nextSpeaker?.role)})`;
+                addTranscriptEntry(safeDisplay(nextSpeaker?.role), aiSpeech, 'speech');
+                speak(aiSpeech, nextSpeaker.role);
+            }
+        } else {
+            handleDebateConcluded();
+        }
+    }, [isPrepTime, currentSpeakerIndex, speakerOrder, speechDuration, debateSetup, addTranscriptEntry, speak, handleDebateConcluded, isListening, stopListening]);
+
+    // Timer logic and Sound Effects
+    useEffect(() => {
+        if (isActive && timer > 0) {
+            timerRef.current = setInterval(() => setTimer(t => t - 1), 1000);
+        } else if (timer === 0 && isActive) {
+            clearInterval(timerRef.current);
+            setIsActive(false);
+            
+            if (!isPrepTime) {
+                playBell("C6", 2);
+                toast('Speech time is over!', { icon: '🔔' });
+                addTranscriptEntry(speakerOrder[currentSpeakerIndex]?.role || 'Speaker', 'Speech time has concluded.', 'info');
+            }
+            handleNextSpeaker(isPrepTime);
+        }
+        return () => clearInterval(timerRef.current);
+    }, [isActive, timer, isPrepTime, currentSpeakerIndex, speakerOrder, addTranscriptEntry, handleNextSpeaker]);
+
+    const isInProtectedTime = useCallback(() => {
+        if (isPrepTime || !isActive || !speakerOrder[currentSpeakerIndex]) return true;
+        if (speakerOrder[currentSpeakerIndex]?.role.includes('Reply')) return true;
+
+        const elapsedSpeechTime = speechDuration - timer;
+        return elapsedSpeechTime < protectedTimeDuration || timer < protectedTimeDuration;
+    }, [isPrepTime, isActive, timer, speechDuration, protectedTimeDuration, currentSpeakerIndex, speakerOrder]);
+
+    // Bell and POI Offer Logic
+    useEffect(() => {
+        const currentSpeaker = speakerOrder[currentSpeakerIndex];
+        if (isActive && !isPrepTime && currentSpeaker) {
+            if (timer === speechDuration - protectedTimeDuration && !currentSpeaker.role.includes('Reply')) {
+                playBell("C5");
+                toast.success("Protected time is over. POIs are now open.", { icon: '👋' });
+            }
+            if (timer === protectedTimeDuration && !currentSpeaker.role.includes('Reply')) {
+                playBell("C5");
+                toast.error("Protected time has begun. No more POIs.", { icon: '🛡️' });
+            }
+            
+            const userIsCurrentSpeaker = currentSpeaker.role === debateSetup?.userRole.split(' (')[0];
+            if (userIsCurrentSpeaker && !aiPoiOfferActive && !isInProtectedTime()) {
+                if (Math.random() < 0.03) {
+                    const aiOpponents = speakerOrder.filter(s => s.team !== currentSpeaker.team);
+                    if (aiOpponents.length > 0) {
+                        const randomAi = aiOpponents[Math.floor(Math.random() * aiOpponents.length)];
+                        setAiOfferingPoiRole(randomAi.role);
+                        setAiPoiOfferActive(true);
+                        toast.info(`${safeDisplay(randomAi.role)} is offering a POI!`, { duration: 5000, icon: '✋' });
+                        addTranscriptEntry(safeDisplay(randomAi.role), 'Offering a Point of Information!', 'poi-offer');
+                    }
+                }
+            }
+        }
+    }, [timer, isActive, isPrepTime, speechDuration, protectedTimeDuration, speakerOrder, currentSpeakerIndex, debateSetup, aiPoiOfferActive, isInProtectedTime, addTranscriptEntry]);
+    
+    // Speech recognition logic
+    useEffect(() => {
+        if (!recognition || !debateSetup) return;
+
+        recognition.onresult = (event) => {
+            let interim = '';
+            let final = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    final += event.results[i][0].transcript;
+                } else {
+                    interim += event.results[i][0].transcript;
+                }
+            }
+            setInterimTranscript(interim);
+            if (final) {
+                setFinalTranscript(prev => prev + final.trim() + ' ');
+            }
+        };
+
+        recognition.onerror = (event) => {
+            toast.error(`Speech recognition error: ${event.error}`);
+            setIsListening(false);
+        };
+
+        recognition.onspeechend = () => stopListening();
+
+        recognition.onend = () => {
+            setIsListening(false);
+            if (!hasProcessedTranscript.current) {
+                hasProcessedTranscript.current = true;
+                setFinalTranscript((currentFinalTranscript) => {
+                    if (currentFinalTranscript.trim()) {
+                        addTranscriptEntry(debateSetup.userRole.split(' (')[0], currentFinalTranscript.trim(), 'speech');
+                        toast.success("Your speech has been added automatically!");
+                    }
+                    return '';
+                });
+            }
+            setInterimTranscript('');
+        };
+    }, [addTranscriptEntry, debateSetup, stopListening]);
+
+    const startListening = () => {
+        if (recognition && !isListening) {
+            if (window.Tone && window.Tone.context.state !== 'running') {
+                window.Tone.context.resume();
+            }
+            hasProcessedTranscript.current = false;
+            setFinalTranscript('');
+            setInterimTranscript('');
+            recognition.start();
+            setIsListening(true);
+            toast.success("Listening... pause when you're done.", { icon: '🎤' });
+        }
     };
-  }, [isActive, timer, isPrepTime, speechDuration, currentSpeakerIndex, speakerOrder.length, debateSetup, addTranscriptEntry, userRole, speakerOrder]);
 
+    const handleManualSubmit = () => {
+        if (manualInputText.trim() && debateSetup) {
+            addTranscriptEntry(debateSetup.userRole.split(' (')[0], manualInputText.trim(), 'speech');
+            toast.success("Your entry has been added!");
+            setManualInputText('');
+        } else {
+            toast.error("Please type something before submitting.");
+        }
+    };
+    
+    const handleAiPoiResponse = (accepted) => {
+        setAiPoiOfferActive(false);
+        const offeringRole = aiOfferingPoiRole;
+        setAiOfferingPoiRole(null);
+        if (accepted) {
+            addTranscriptEntry(debateSetup.userRole.split(' (')[0], 'Accepted.', 'poi-response');
+            addTranscriptEntry(offeringRole, "(Simulated POI: On that point, how do you account for...?)", 'poi-delivery');
+        } else {
+            addTranscriptEntry(debateSetup.userRole.split(' (')[0], 'Declined.', 'poi-response');
+        }
+    };
 
-  const isInProtectedTime = useCallback(() => {
-    if (isPrepTime || !isActive || !debateSetup) return false;
+    const handleUserOfferPoi = () => {
+        const currentSpeaker = speakerOrder[currentSpeakerIndex];
+        const userRoleBase = debateSetup.userRole.split(' (')[0];
+        if (!currentSpeaker || currentSpeaker.role === userRoleBase || isInProtectedTime()) return;
+        addTranscriptEntry(userRoleBase, 'Offering a Point of Information!', 'poi-offer');
+        setTimeout(() => {
+            const aiAccepts = Math.random() < 0.5;
+            if (aiAccepts) {
+                addTranscriptEntry(currentSpeaker.role, 'Accepted.', 'poi-response');
+            } else {
+                addTranscriptEntry(currentSpeaker.role, 'Declined.', 'poi-response');
+            }
+        }, 1500);
+    };
 
-    const initialSpeechDuration = getMinutesFromString(debateSetup.formatDetails.speechTime) * 60;
-    const remainingTime = timer;
-    const elapsedSpeechTime = initialSpeechDuration - timer;
-
-    return (
-      elapsedSpeechTime < protectedTimeDuration ||
-      remainingTime <= protectedTimeDuration
-    );
-  }, [isPrepTime, isActive, timer, protectedTimeDuration, debateSetup]);
-
-
-  useEffect(() => {
-    if (!debateSetup) return;
+    const toggleTimer = () => setIsActive(!isActive);
+    const formatTime = (seconds) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 
     const currentSpeaker = speakerOrder[currentSpeakerIndex];
-    const userRoleBase = userRole.split(' (')[0];
-    const userIsCurrentSpeaker = currentSpeaker && (currentSpeaker.role === userRoleBase);
+    const userRoleBase = debateSetup ? debateSetup.userRole.split(' (')[0] : '';
+    const userIsCurrentSpeaker = currentSpeaker?.role === userRoleBase;
 
-    // AI only offers POI if the user is currently speaking AND user has allowed POIs AND it's not protected time
-    if (isActive && !isPrepTime && userIsCurrentSpeaker && userPoiAvailability && !aiPoiOfferActive && !isInProtectedTime()) {
-      const offerChance = Math.random();
-      if (offerChance < 0.03) { // 3% chance for AI to offer a POI every second
-        const aiOpponents = speakerOrder.filter(s => s.team !== currentSpeaker.team && s.role !== userRoleBase);
-        if (aiOpponents.length > 0) {
-          const randomAi = aiOpponents[Math.floor(Math.random() * aiOpponents.length)];
-          setAiOfferingPoiRole(randomAi.role);
-          setAiPoiOfferActive(true);
-          toast.info(`${safeDisplay(randomAi.role)} is offering a POI!`, {
-            duration: 5000,
-            position: 'top-center',
-            icon: '✋',
-          });
-          addTranscriptEntry(safeDisplay(randomAi.role), 'Offering a Point of Information!', 'poi-offer');
-        }
-      }
-    }
-  }, [isActive, isPrepTime, currentSpeakerIndex, userRole, speakerOrder, userPoiAvailability, aiPoiOfferActive, isInProtectedTime, debateSetup, addTranscriptEntry]);
-
-
-  const toggleTimer = () => {
-    if (!debateSetup || (timer === 0 && !isActive && speakerOrder.length === 0 && !isPrepTime)) return;
-
-    setIsActive(!isActive);
-    if (!isActive) {
-      toast.success('Timer Started!', {
-        position: 'bottom-center',
-        duration: 1000,
-      });
-      if (!isPrepTime) { // If it's speech time and timer starts, add a transcript entry
-        addTranscriptEntry(currentSpeaker?.role || 'Speaker', 'Speech resumed.', 'info');
-      } else {
-        addTranscriptEntry('Moderator', 'Preparation timer started.', 'info');
-      }
-    } else {
-      toast('Timer Paused.', {
-        icon: '⏸️',
-        position: 'bottom-center',
-        duration: 1000,
-      });
-      if (!isPrepTime) { // If it's speech time and timer pauses, add a transcript entry
-        addTranscriptEntry(currentSpeaker?.role || 'Speaker', 'Speech paused.', 'info');
-      } else {
-        addTranscriptEntry('Moderator', 'Preparation timer paused.', 'info');
-      }
-    }
-  };
-
-  const resetTimer = () => {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
-    setIsActive(false);
-    setAiPoiOfferActive(false); // Reset POI offer state
-    setAiOfferingPoiRole(null); // Reset POI offer state
-
-    if (debateSetup) {
-      if (isPrepTime) {
-        setTimer(getMinutesFromString(debateSetup.formatDetails.prepTime) * 60);
-        toast('Prep time timer reset!', {
-          icon: '🔄',
-          position: 'bottom-center',
-          duration: 1500,
-        });
-        addTranscriptEntry('Moderator', 'Preparation timer reset.', 'info');
-      } else {
-        setTimer(speechDuration);
-        toast('Speech timer reset!', {
-          icon: '🔄',
-          position: 'bottom-center',
-          duration: 1500,
-        });
-        addTranscriptEntry(currentSpeaker?.role || 'Speaker', 'Speech timer reset.', 'info');
-      }
-    } else {
-      setTimer(0);
-      toast.error('Cannot reset timer: Debate setup not loaded.', {
-        position: 'bottom-center',
-        duration: 2000,
-      });
-    }
-  };
-
-
-  const handleNextSpeaker = () => {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
-    setIsActive(false);
-    setAiPoiOfferActive(false); // Reset POI offer state
-    setAiOfferingPoiRole(null); // Reset POI offer state
-    setUserPoiAvailability(false); // Reset user POI availability
-    setUserSpeechInput(''); // Clear user speech input
-
-    if (isPrepTime) {
-      toast.success("Prep time skipped! Starting first speech.", {
-        duration: 3000,
-        position: 'top-center',
-        icon: '⏩',
-      });
-      addTranscriptEntry('Moderator', 'Preparation time skipped. Moving to first speech.', 'info');
-      setIsPrepTime(false);
-      setCurrentSpeakerIndex(0);
-      setTimer(speechDuration);
-      setIsActive(true); // Start timer for the first speaker
-      const nextSpeaker = speakerOrder[0];
-      const userRoleBase = userRole.split(' (')[0];
-      if (nextSpeaker && nextSpeaker.role !== userRoleBase) {
-        addTranscriptEntry(safeDisplay(nextSpeaker.role), `(Simulated AI Speech) Good evening, everyone. I stand here as the ${safeDisplay(nextSpeaker.role)} to begin our arguments on this motion.`, 'speech');
-      }
-    } else if (currentSpeakerIndex < speakerOrder.length - 1) {
-      addTranscriptEntry('Moderator', `${currentSpeaker?.role}'s speech concluded.`, 'info');
-      setCurrentSpeakerIndex(prevIndex => prevIndex + 1);
-      setTimer(speechDuration);
-      setIsActive(true); // Start timer for the next speaker
-      toast.success(`Next up: ${safeDisplay(speakerOrder[currentSpeakerIndex + 1]?.role)}!`, {
-        icon: '➡️',
-        duration: 2000,
-        position: 'top-right',
-      });
-      const nextSpeaker = speakerOrder[currentSpeakerIndex + 1];
-      const userRoleBase = userRole.split(' (')[0];
-      if (nextSpeaker && nextSpeaker.role !== userRoleBase) {
-        addTranscriptEntry(safeDisplay(nextSpeaker.role), `(Simulated AI Speech) Thank you. As the ${safeDisplay(nextSpeaker.role)}, I will now continue our case and rebut the opposition.`, 'speech');
-      }
-    } else {
-      handleDebateConcluded();
-    }
-  };
-
-  const handleDebateConcluded = () => {
-    addTranscriptEntry('Moderator', 'The debate has concluded. All speeches are complete.', 'info');
-    toast.custom((t) => (
-      <div
-        className={`${
-          t.visible ? 'animate-enter' : 'animate-leave'
-        } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
-      >
-        <div className="flex-1 w-0 p-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0 pt-0.5">
-              <Zap className="h-6 w-6 text-green-500" />
-            </div>
-            <div className="ml-3 flex-1">
-              <p className="text-lg font-medium text-gray-900">
-                Debate Concluded!
-              </p>
-              <p className="mt-1 text-sm text-gray-500">
-                All speeches completed. You can now go back to the setup screen.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="flex border-l border-gray-200">
-          <button
-            onClick={() => {
-              toast.dismiss(t.id);
-            }}
-            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    ), { duration: Infinity });
-  };
-
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  const currentSpeaker = speakerOrder[currentSpeakerIndex];
-  const userRoleBase = userRole.split(' (')[0];
-  const userIsCurrentSpeaker = currentSpeaker && (currentSpeaker.role === userRoleBase);
-
-  console.log("Current Speaker (before render):", currentSpeaker);
-
-  const handleUserOfferPoi = () => {
-    if (!currentSpeaker || !isActive || isInProtectedTime()) return; // Prevent offering if not active or in protected time
-    toast.info("You offered a POI!", {
-      duration: 2000,
-      position: 'bottom-center',
-      icon: '🙋',
-    });
-    addTranscriptEntry(userRoleBase, 'Offering a Point of Information!', 'poi-offer');
-
-    // Simulate AI response to user's POI offer
-    setTimeout(() => {
-      const aiAccepts = Math.random() < 0.5; // 50% chance AI accepts
-      if (aiAccepts) {
-        toast.success(`${safeDisplay(currentSpeaker.role)} accepts your POI! (Simulated response: 'Yes, on that point...')`, {
-          duration: 4000,
-          position: 'bottom-center',
-          icon: '✅',
-        });
-        addTranscriptEntry(safeDisplay(currentSpeaker.role), 'Yes, on that point...', 'poi-response');
-        addTranscriptEntry(userRoleBase, '(Simulated: User delivers POI)', 'poi-delivery');
-        addTranscriptEntry(safeDisplay(currentSpeaker.role), '(Simulated: AI responds to POI)', 'poi-response');
-      } else {
-        toast.error(`${safeDisplay(currentSpeaker.role)} declines your POI. (Simulated response: 'No thank you.')`, {
-          duration: 3000,
-          position: 'bottom-center',
-          icon: '❌',
-        });
-        addTranscriptEntry(safeDisplay(currentSpeaker.role), 'No thank you.', 'poi-response');
-      }
-    }, 1500);
-  };
-
-  const handleAiPoiResponse = (accepted) => {
-    setAiPoiOfferActive(false);
-    setAiOfferingPoiRole(null);
-    if (accepted) {
-      toast.success("You accepted the POI! (Simulated AI point: 'Don't you agree that X is problematic?')", {
-        duration: 5000,
-        position: 'top-center',
-        icon: '🤔',
-      });
-      addTranscriptEntry(userRoleBase, 'I accept the Point of Information.', 'poi-response');
-      addTranscriptEntry(safeDisplay(aiOfferingPoiRole), "Don't you agree that X is problematic?", 'poi-delivery');
-      addTranscriptEntry(userRoleBase, '(Simulated: User responds to POI)', 'poi-response');
-    } else {
-      toast.error("You declined the POI.", {
-        duration: 3000,
-        position: 'top-center',
-        icon: '🙅',
-      });
-      addTranscriptEntry(userRoleBase, 'I decline the Point of Information.', 'poi-response');
-    }
-  };
-
-  const handleUserSpeechSubmit = () => {
-    if (userSpeechInput.trim() === '') {
-      toast.error("Please enter some text for your speech.", { position: 'bottom-center' });
-      return;
-    }
-    addTranscriptEntry(userRoleBase, userSpeechInput, 'speech');
-    setUserSpeechInput('');
-    toast.success("Your speech has been added to the transcript!", { position: 'bottom-center' });
-  };
-
-
-  // Render loading state if debateSetup is not available yet
-  if (!debateSetup) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
-        <h1 className="text-4xl text-amber-400">Loading Asian Parliamentary Debate...</h1>
-        <p className="mt-4 text-gray-300">Setting up your debate environment.</p>
-        <Link to="/" className="mt-6 px-6 py-3 bg-blue-600 rounded-md hover:bg-blue-700 text-white font-semibold shadow-lg transition duration-300">
-          Go to Setup Screen
-        </Link>
-      </div>
-    );
-  }
+        <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col font-sans overflow-hidden">
+            <Toaster position="top-center" reverseOrder={false} />
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-gray-100 flex flex-col lg:flex-row items-stretch font-inter">
-      <Toaster />
-
-      {/* Left Pane: Debate Info & Controls */}
-      <div className="lg:w-2/5 p-6 sm:p-8 bg-gray-800 border-r border-gray-700 shadow-xl flex flex-col justify-between">
-        <div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-6 text-center lg:text-left">
-            <span className="text-emerald-400">AP</span> Debate Live
-          </h1>
-
-          <div className="mb-8 p-4 bg-gray-900 rounded-lg border border-gray-700 shadow-md">
-            <h2 className="text-xl font-semibold text-gray-200 mb-2 flex items-center">
-              <Info className="w-5 h-5 mr-2 text-blue-400" /> Current Motion
-            </h2>
-            <p className="text-lg text-amber-200 font-medium">{safeDisplay(currentMotion)}</p>
-          </div>
-
-          <div className="mb-8 p-4 bg-gray-900 rounded-lg border border-gray-700 shadow-md">
-            <h2 className="text-xl font-semibold text-gray-200 mb-2 flex items-center">
-              <Timer className="w-5 h-5 mr-2 text-purple-400" /> Debate Phase
-            </h2>
-            <p className="text-2xl font-bold text-white text-center mb-4">
-              {isPrepTime ? 'Preparation Time' : 'Speech Time'}
-            </p>
-            <div className="text-6xl font-mono font-bold text-center text-teal-400">
-              {formatTime(timer)}
-            </div>
-            <div className="flex justify-center gap-4 mt-6">
-              <button
-                onClick={toggleTimer}
-                className="p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition duration-200 text-white"
-                title={isActive ? 'Pause Timer' : 'Start Timer'}
-              >
-                {isActive ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-              </button>
-              <button
-                onClick={resetTimer}
-                className="p-3 bg-red-600 hover:bg-red-700 rounded-full shadow-lg transition duration-200 text-white"
-                title="Reset Timer"
-              >
-                <RotateCcw className="w-6 h-6" />
-              </button>
-              {/* Next Speaker button always available */}
-              <button
-                onClick={handleNextSpeaker}
-                className="p-3 bg-green-600 hover:bg-green-700 rounded-full shadow-lg transition duration-200 text-white"
-                title={isPrepTime ? 'Skip Prep & Start Debate' : 'Next Speaker'}
-              >
-                <SkipForward className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-
-          {/* POI Management Section */}
-          <div className="mb-8 p-4 bg-gray-900 rounded-lg border border-gray-700 shadow-md">
-            <h2 className="text-xl font-semibold text-gray-200 mb-3 flex items-center">
-              <MessageSquare className="w-5 h-5 mr-2 text-orange-400" /> Points of Information
-            </h2>
-            {isPrepTime || !currentSpeaker ? (
-              // Case 1: During prep time or no speaker yet
-              <p className="text-gray-400 italic">POIs are not available during prep time or before debate starts.</p>
-            ) : userIsCurrentSpeaker ? (
-              // Case 2: User is speaking (controls POI availability)
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-lg text-gray-300">Allow POIs:</span>
-                  <button
-                    onClick={() => {
-                      setUserPoiAvailability(!userPoiAvailability);
-                      if (!userPoiAvailability) {
-                        toast.info("You are now accepting POIs.", { position: 'bottom-center' });
-                      } else {
-                        toast("You are no longer accepting POIs.", { icon: '🚫', position: 'bottom-center' });
-                      }
-                    }}
-                    // Disable if timer is paused OR if it's in protected time
-                    disabled={!isActive || isInProtectedTime()}
-                    className={`px-4 py-2 rounded-md font-semibold transition duration-200 ${
-                      userPoiAvailability ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
-                    } ${(!isActive || isInProtectedTime()) ? 'opacity-50 cursor-not-allowed' : ''} text-white`}
-                  >
-                    {userPoiAvailability ? 'Active' : 'Inactive'}
-                  </button>
+            <header className="flex-shrink-0 bg-gray-800/50 backdrop-blur-lg border-b border-gray-700/50 p-4 flex justify-between items-center">
+                <Link to="/" className="flex items-center gap-2 text-gray-300 hover:text-white transition">
+                    <ArrowLeft className="w-5 h-5" />
+                    Back to Setup
+                </Link>
+                <div className="text-center">
+                    <h2 className="text-sm text-gray-400">Motion</h2>
+                    <p className="font-semibold text-white truncate max-w-md">{safeDisplay(debateSetup.motion)}</p>
                 </div>
-                {/* Conditionally show messages ONLY if it's speech time and timer is active */}
-                {!isActive && !isPrepTime && (
-                  <p className="text-sm text-gray-400 mt-2">POIs can only be toggled when the timer is active.</p>
-                )}
-                {isInProtectedTime() && isActive && !isPrepTime && (
-                  <p className="text-sm text-red-300 mt-2">POIs are disabled during protected time.</p>
-                )}
+                <button onClick={() => setIsRulesModalOpen(true)} className="flex items-center gap-2 text-gray-300 hover:text-white transition">
+                    <Info className="w-5 h-5" />
+                    Debate Rules
+                </button>
+            </header>
 
-                {aiPoiOfferActive && (
-                  <div className="mt-4 p-3 bg-blue-800 rounded-md flex flex-col items-center">
-                    <p className="text-amber-200 text-lg font-semibold mb-2">{safeDisplay(aiOfferingPoiRole)} is offering a POI!</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleAiPoiResponse(true)}
-                        className="px-4 py-2 bg-green-500 rounded-md hover:bg-green-600 text-white flex items-center"
-                      >
-                        <Check className="w-5 h-5 mr-1" /> Accept
-                      </button>
-                      <button
-                        onClick={() => handleAiPoiResponse(false)}
-                        className="px-4 py-2 bg-red-500 rounded-md hover:bg-red-600 text-white flex items-center"
-                      >
-                        <X className="w-5 h-5 mr-1" /> Decline
-                      </button>
+            <main className="flex-grow grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
+                <div className="lg:col-span-1 flex flex-col gap-6">
+                    <TeamPanel teamName="Government" speakers={speakerOrder.filter(s => s.team === 'Government')} currentSpeaker={currentSpeaker} userRole={userRoleBase} teamColor="gov" speakingAi={speakingAi} />
+                </div>
+
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                    <div className="bg-gray-800/30 backdrop-blur-xl p-6 rounded-2xl border border-gray-700/50 shadow-2xl flex flex-col items-center justify-center text-center">
+                        <p className="text-gray-400 text-sm">{isPrepTime ? 'Debate Phase' : 'Current Speaker'}</p>
+                        <p className="text-3xl font-bold text-white my-2">{isPrepTime ? 'Preparation' : currentSpeaker?.role || 'Debate Concluded'}</p>
+                        <p className="text-5xl font-mono font-bold text-emerald-400">{formatTime(timer)}</p>
                     </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              // Case 3: AI is speaking (user can offer POI)
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-lg text-gray-300">Offer POI:</span>
-                  <button
-                    onClick={handleUserOfferPoi}
-                    // Disable if timer is paused OR if it's in protected time
-                    disabled={!isActive || isInProtectedTime()}
-                    className={`px-4 py-2 rounded-md font-semibold transition duration-200 ${
-                      (!isActive || isInProtectedTime()) ? 'bg-gray-600 opacity-50 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                    } text-white flex items-center`}
-                  >
-                    <Hand className="w-5 h-5 mr-2" /> Offer POI
-                  </button>
+
+                    <div className="bg-gray-800/30 backdrop-blur-xl p-4 rounded-2xl border border-gray-700/50 shadow-2xl">
+                        <div className="flex items-center justify-center gap-4 mb-4">
+                            <button onClick={toggleTimer} className="p-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white shadow-lg" title={isActive ? 'Pause' : 'Play'}>{isActive ? <Pause /> : <Play />}</button>
+                            <button onClick={() => handleNextSpeaker()} className="p-4 bg-green-600 hover:bg-green-700 rounded-full text-white shadow-lg" title="Next Speaker"><SkipForward /></button>
+                        </div>
+                        
+                        {userIsCurrentSpeaker && !isPrepTime && (
+                             <div className="my-4 space-y-4">
+                                <div className="text-center">
+                                    <button onClick={isListening ? stopListening : startListening} className={`px-6 py-4 rounded-full font-bold text-white transition-all duration-300 flex items-center gap-3 mx-auto ${isListening ? 'bg-red-600 hover:bg-red-700 animate-pulse' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                                        <Mic className="w-6 h-6" />
+                                        {isListening ? 'Stop Speaking' : 'Start Speaking'}
+                                    </button>
+                                    <p className="text-gray-400 text-sm mt-3 h-5">{interimTranscript || (isListening ? 'Listening...' : 'Click to start speaking')}</p>
+                                </div>
+                                <div className="flex items-center gap-2 text-gray-500"><hr className="flex-grow border-gray-600" /><span className="font-bold text-xs">OR</span><hr className="flex-grow border-gray-600" /></div>
+                                <div className="flex flex-col gap-2">
+                                     <textarea value={manualInputText} onChange={(e) => setManualInputText(e.target.value)} placeholder="Or type your speech here and submit..." rows="4" className="w-full bg-gray-900/70 border border-gray-600 rounded-lg p-3 text-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition" disabled={isListening} />
+                                     <button onClick={handleManualSubmit} className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={isListening}><SendHorizonal className="w-5 h-5"/>Submit Text</button>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="border-t border-gray-700 pt-4">
+                            {aiPoiOfferActive && userIsCurrentSpeaker ? (
+                                <div className="p-3 bg-blue-800 rounded-md flex flex-col items-center text-center">
+                                    <p className="text-amber-200 text-lg font-semibold mb-2">{safeDisplay(aiOfferingPoiRole)} is offering a POI!</p>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleAiPoiResponse(true)} className="px-4 py-2 bg-green-500 rounded-md hover:bg-green-600 text-white flex items-center"><Check className="w-5 h-5 mr-1" /> Accept</button>
+                                        <button onClick={() => handleAiPoiResponse(false)} className="px-4 py-2 bg-red-500 rounded-md hover:bg-red-600 text-white flex items-center"><X className="w-5 h-5 mr-1" /> Decline</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        {isInProtectedTime() && !isPrepTime && (
+                                            <div className="flex items-center gap-2 text-red-400 bg-red-900/50 px-3 py-1.5 rounded-lg border border-red-700/50">
+                                                <Shield className="w-5 h-5"/>
+                                                <span className="text-sm font-bold">Protected Time</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button onClick={handleUserOfferPoi} className="p-3 bg-gray-700 hover:bg-gray-600 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed" title="Offer POI" disabled={userIsCurrentSpeaker || isPrepTime || isInProtectedTime()}><Hand /></button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="bg-gray-800/30 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl flex-grow flex flex-col p-6">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><BookOpen className="w-6 h-6 text-emerald-400"/>Transcript</h3>
+                        <div className="flex-grow overflow-y-auto pr-2 space-y-4">
+                            {transcript.map((entry, index) => (
+                                <div key={index} className={`flex flex-col p-3 rounded-lg ${entry.type === 'info' ? 'bg-gray-700/50' : 'bg-gray-900/50'}`}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <p className={`font-bold text-sm ${entry.speaker === userRoleBase ? 'text-emerald-300' : 'text-blue-300'}`}>{safeDisplay(entry.speaker)}</p>
+                                        <p className="text-xs text-gray-500">{entry.timestamp}</p>
+                                    </div>
+                                    <p className="text-gray-200 whitespace-pre-wrap">{safeDisplay(entry.text)}</p>
+                                </div>
+                            ))}
+                            <div ref={transcriptEndRef} />
+                        </div>
+                    </div>
                 </div>
-                {/* Conditionally show messages ONLY if it's speech time and timer is active */}
-                {!isActive && !isPrepTime && (
-                  <p className="text-sm text-gray-400 mt-2">Cannot offer POI when the timer is paused.</p>
-                )}
-                {isInProtectedTime() && isActive && !isPrepTime && (
-                  <p className="text-sm text-red-300 mt-2">Cannot offer POI during protected time.</p>
-                )}
-                <p className="text-sm text-gray-400 mt-2">
-                  (Simulated: AI will decide to accept or decline your POI.)
-                </p>
-              </>
+                
+                <div className="lg:col-span-1 flex flex-col gap-6">
+                    <TeamPanel teamName="Opposition" speakers={speakerOrder.filter(s => s.team === 'Opposition')} currentSpeaker={currentSpeaker} userRole={userRoleBase} teamColor="opp" speakingAi={speakingAi} />
+                </div>
+            </main>
+
+            {isRulesModalOpen && debateSetup.formatDetails && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-700 animate-fade-in-up flex flex-col" style={{maxHeight: '90vh'}}>
+                        <header className="p-6 flex justify-between items-center border-b border-gray-700">
+                            <h2 className="text-2xl font-bold text-white flex items-center gap-3"><Info className="w-7 h-7 text-blue-400"/>Debate Rules & Roles</h2>
+                            <button onClick={() => setIsRulesModalOpen(false)} className="text-gray-500 hover:text-white transition-colors"><XIcon className="w-7 h-7"/></button>
+                        </header>
+                        <div className="p-6 overflow-y-auto">
+                            <h3 className="font-bold text-xl text-emerald-300 mb-3">AP Rules</h3>
+                            <ul className="list-disc list-inside space-y-2 text-gray-300 mb-6">
+                                {debateSetup.formatDetails.rules?.map((rule, index) => (
+                                    <li key={index} className="text-base">{safeDisplay(rule)}</li>
+                                ))}
+                            </ul>
+                            <h3 className="font-bold text-xl text-emerald-300 mb-3">Speaker Roles</h3>
+                            <div className="space-y-4">
+                                {debateSetup.formatDetails.speakerRolesDetailed?.map((roleDetail, index) => (
+                                     <div key={index}>
+                                         <p className="font-semibold text-blue-300">{safeDisplay(roleDetail.role)}</p>
+                                         <p className="text-gray-400 text-sm">{safeDisplay(roleDetail.description)}</p>
+                                     </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
-          </div>
-
-          {/* User Speech Input Section */}
-          {userIsCurrentSpeaker && !isPrepTime && (
-            <div className="mb-8 p-4 bg-gray-900 rounded-lg border border-gray-700 shadow-md">
-              <h2 className="text-xl font-semibold text-gray-200 mb-3 flex items-center">
-                <Mic className="w-5 h-5 mr-2 text-green-400" /> Your Speech
-              </h2>
-              <textarea
-                className="w-full p-3 bg-gray-700 text-gray-100 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y min-h-[80px]"
-                placeholder="Type your speech here..."
-                value={userSpeechInput}
-                onChange={(e) => setUserSpeechInput(e.target.value)}
-                disabled={!isActive} // Disable input if timer is not active
-              ></textarea>
-              <button
-                onClick={handleUserSpeechSubmit}
-                className={`mt-3 w-full px-4 py-2 rounded-md font-semibold transition duration-200 text-white flex items-center justify-center ${
-                  !isActive || userSpeechInput.trim() === '' ? 'bg-gray-600 opacity-50 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
-                }`}
-                disabled={!isActive || userSpeechInput.trim() === ''}
-              >
-                <BookOpen className="w-5 h-5 mr-2" /> Add to Transcript
-              </button>
-              {!isActive && (
-                <p className="text-sm text-gray-400 mt-2">Start the timer to add your speech.</p>
-              )}
-            </div>
-          )}
-
-          {/* Debate Transcript Section - NOW ON LEFT PANE */}
-          <div className="mb-8 p-6 bg-gray-900 rounded-lg border border-gray-700 shadow-md flex-grow flex flex-col">
-            <h3 className="text-2xl font-semibold text-gray-200 mb-4 flex items-center">
-              <BookOpen className="w-6 h-6 mr-2 text-indigo-400" /> Debate Transcript
-            </h3>
-            <div className="flex-grow overflow-y-auto pr-2" style={{ maxHeight: '400px' }}>
-              {transcript.length === 0 ? (
-                <p className="text-gray-400 italic">Transcript will appear here as the debate progresses.</p>
-              ) : (
-                <div className="space-y-4">
-                  {transcript.map((entry, index) => (
-                    <div key={index} className={`p-3 rounded-lg ${
-                      entry.type === 'user' ? 'bg-blue-900' :
-                      entry.type === 'ai' ? 'bg-purple-900' :
-                      entry.type === 'poi-offer' ? 'bg-orange-900' :
-                      entry.type === 'poi-response' ? 'bg-teal-900' :
-                      entry.type === 'poi-delivery' ? 'bg-yellow-900' :
-                      'bg-gray-700'
-                    }`}>
-                      <p className="text-sm text-gray-400 mb-1">{entry.timestamp}</p>
-                      <p className="font-semibold text-lg text-white">
-                        <span className={`${
-                          entry.speaker === userRoleBase ? 'text-emerald-300' :
-                          entry.speaker === 'Moderator' ? 'text-red-300' :
-                          'text-blue-300'
-                        }`}>{safeDisplay(entry.speaker)}:</span> {safeDisplay(entry.text)}
-                      </p>
-                    </div>
-                  ))}
-                  <div ref={transcriptEndRef} />
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-
-        {/* Back to Setup Button */}
-        <Link to="/" className="mt-8 block w-full text-center px-6 py-3 bg-indigo-700 rounded-md hover:bg-indigo-800 text-white font-semibold shadow-md transition duration-300">
-          Back to Setup Screen
-        </Link>
-      </div>
-
-      {/* Right Pane: Debate Details & Speaker Flow */}
-      <div className="lg:w-3/5 p-6 sm:p-8 bg-gray-900 flex flex-col">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-6 text-center">
-          Debate Flow & Information
-        </h2>
-
-        {/* Current Speaker Section */}
-        <div className="mb-8 p-6 bg-gray-800 rounded-lg border border-gray-600 shadow-lg text-center flex flex-col items-center">
-          <h3 className="text-2xl font-bold text-gray-200 mb-3">Current Speaker</h3>
-          {currentSpeaker ? (
-            <>
-              {userIsCurrentSpeaker ? (
-                <Mic className="w-16 h-16 text-emerald-400 mb-4 animate-bounce" />
-              ) : (
-                <Speaker className="w-16 h-16 text-blue-400 mb-4 animate-pulse" />
-              )}
-              <p className="text-4xl font-extrabold text-yellow-400 mb-2">
-                {safeDisplay(currentSpeaker.role)}
-              </p>
-              <p className="text-xl text-gray-300">
-                ({safeDisplay(currentSpeaker.team)})
-              </p>
-              {userIsCurrentSpeaker && (
-                <p className="mt-3 text-lg font-semibold text-green-300 animate-pulse">
-                  It's your turn!
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-xl text-gray-400">Waiting for debate to start...</p>
-          )}
-        </div>
-
-        {/* Speaker Order */}
-        <div className="mb-8 p-6 bg-gray-800 rounded-lg border border-gray-600 shadow-lg">
-          <h3 className="text-2xl font-semibold text-gray-200 mb-4">Speaker Order:</h3>
-          <ol className="space-y-2 text-lg">
-            {speakerOrder.map((speaker, index) => {
-              const displayString = `${speaker.role}${speaker.team ? ' (' + speaker.team + ')' : ''}`;
-              return (
-                <li
-                  key={index}
-                  className={`
-                    p-3 rounded-md flex items-center justify-between ${
-                      index === currentSpeakerIndex
-                      ? 'bg-emerald-700 text-white font-bold shadow-md transform scale-105 transition-all duration-300'
-                      : 'bg-gray-700 text-gray-300'
-                    }
-                  `}
-                >
-                  <span>
-                    {index + 1}. {displayString}
-                  </span>
-                  {index === currentSpeakerIndex && (
-                    <Zap className="w-5 h-5 text-yellow-300 animate-bounce" />
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-
-
-        {/* Rules Section */}
-        <div className="mb-8 p-6 bg-gray-800 rounded-lg border border-gray-600 shadow-lg">
-          <button
-            onClick={() => setShowRules(!showRules)}
-            className="w-full flex justify-between items-center text-xl font-semibold text-gray-200 hover:text-white transition-colors duration-200 pb-4 border-b border-gray-700"
-          >
-            AP Debate Rules
-            {showRules ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
-          </button>
-          {showRules && (
-            <ul className="list-disc list-inside space-y-2 text-gray-300 mt-4">
-              {debateSetup.formatDetails?.rules?.map((rule, index) => (
-                <li key={index} className="text-base">{safeDisplay(rule)}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Detailed Speaker Roles Section */}
-        <div className="mb-8 p-6 bg-gray-800 rounded-lg border border-gray-600 shadow-lg">
-          <button
-            onClick={() => setShowRoles(!showRoles)}
-            className="w-full flex justify-between items-center text-xl font-semibold text-gray-200 hover:text-white transition-colors duration-200 pb-4 border-b border-gray-700"
-          >
-            Detailed Speaker Roles
-            {showRoles ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
-          </button>
-          {showRoles && (
-            <ul className="list-disc list-inside space-y-3 text-gray-300 mt-4">
-              {debateSetup.formatDetails?.speakerRolesDetailed?.map((roleDetail, index) => (
-                <li key={index} className="text-base">
-                  <span className="font-semibold text-blue-300">{safeDisplay(roleDetail.role)}:</span> {safeDisplay(roleDetail.description)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-      </div>
-    </div>
-  );
+    );
 };
 
 export default APDebateScreen;
