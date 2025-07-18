@@ -18,6 +18,7 @@ import {
     BrainCircuit
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axiosInstance from '../utils/axiosInstance'; // Add this import at the top
 
 // --- DATA & CONFIGURATION ---
 const debateFormats = {
@@ -195,20 +196,33 @@ const DebateScreen = () => {
     };
 
     const handleStartDebate = () => setShowConfirmation(true);
-    const handleConfirmDebate = () => {
+    // Replace handleConfirmDebate with API call to create debate
+    const handleConfirmDebate = async () => {
         const debatePath = debateFormats[selectedFormat].debatePath;
-        if (debatePath) {
-            navigate(debatePath, {
-                state: {
-                    format: selectedFormat,
-                    motion: selectedMotion || customMotion,
-                    userRole,
-                    aiSkillLevels,
-                    aiPersonalities: aiSettingsMode === 'default' ? {} : aiPersonalities,
-                    aiBenchmarks: aiSettingsMode === 'default' ? {} : aiBenchmarks,
-                    formatDetails: currentFormatDetails,
-                }
-            });
+        try {
+            // Extract full role name (before any " (")
+            const userRoleFull = userRole.split(' (')[0];
+            const payload = {
+                // REQUIRED FIELDS
+                title: selectedMotion || customMotion,
+                debateType: selectedFormat,
+                motion: selectedMotion || customMotion,
+                userRole: userRoleFull, // Use only the full role name
+                status: 'prep',
+                // OPTIONAL/EXTRA FIELDS
+                aiSkillLevels,
+                aiPersonalities: aiSettingsMode === 'default' ? {} : aiPersonalities,
+                aiBenchmarks: aiSettingsMode === 'default' ? {} : aiBenchmarks,
+                formatDetails: currentFormatDetails,
+            };
+            // Call backend to create debate session
+            const res = await axiosInstance.post('/debates', payload);
+            const sessionId = res.data.data?._id;
+            if (debatePath && sessionId) {
+                navigate(`${debatePath}/${sessionId}`);
+            }
+        } catch (err) {
+            alert('Failed to create debate session. Please try again.');
         }
         setShowConfirmation(false);
     };

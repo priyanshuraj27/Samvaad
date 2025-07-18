@@ -23,9 +23,9 @@ function App() {
         <Route path='/' element={<LoginPage/>}/>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/debate" element={<DebateScreen />} />
-        <Route path="/ap-debate" element={<APDebateScreen />} />
-        <Route path="/bp-debate" element={<BPDebateScreen />} />
-        <Route path="/ws-debate" element={<WSDebateScreen />} />
+        <Route path="/ap-debate/:sessionId" element={<APDebateScreen />} />
+        <Route path="/bp-debate/:sessionId" element={<BPDebateScreen />} />
+        <Route path="/ws-debate/:sessionId" element={<WSDebateScreen />} />
         <Route path="/browse-motions" element={<BrowseMotions />} />
         <Route path="/adjudicator" element={<Adjudicator />} />
         <Route path="/signup" element={<SignupPage />} />

@@ -1,5 +1,15 @@
 import mongoose from "mongoose";
 
+const transcriptEntrySchema = new mongoose.Schema(
+  {
+    speaker: String,
+    text: String,
+    type: String,
+    timestamp: String,
+  },
+  { _id: false }
+);
+
 const debateSessionSchema = new mongoose.Schema(
   {
     title: String,
@@ -8,8 +18,9 @@ const debateSessionSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     userRole: String,
     participants: [{ name: String, isAI: Boolean, role: String, team: String }],
-    transcript: String, 
+    transcript: { type: [transcriptEntrySchema], default: [] },
     adjudication: { type: mongoose.Schema.Types.ObjectId, ref: "Adjudication" },
+    status: { type: String, enum: ["prep", "ongoing", "completed"], default: "prep" }, // <-- added status field
   },
   { timestamps: true }
 );

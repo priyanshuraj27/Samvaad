@@ -73,7 +73,7 @@ const LoginPage = () => {
       // Handle success
       setSuccess('Login successful! Redirecting...');
       setTimeout(() => {
-        navigate('/adjudicator');
+        navigate('/dashboard');
       }, 1000);
 
     } catch (err) {

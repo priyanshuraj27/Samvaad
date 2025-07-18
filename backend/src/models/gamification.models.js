@@ -51,5 +51,20 @@ gamificationSchema.pre("save", function (next) {
   next();
 });
 
+/**
+ * Static method to get top 5 users for leaderboard, sorted by XP descending.
+ * Populates user info (username, fullName, avatar).
+ */
+gamificationSchema.statics.getTopLeaderboard = async function () {
+  return this.find({})
+    .sort({ xp: -1 })
+    .limit(5)
+    .populate({
+      path: "user",
+      select: "username fullName"
+    })
+    .lean();
+};
+
 export const Gamification = mongoose.model("Gamification", gamificationSchema);
 export { LEVELS };

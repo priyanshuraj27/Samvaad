@@ -47,3 +47,7 @@ export const setXP = asyncHandler(async (req, res) => {
 export const getLevels = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, "Levels fetched", LEVELS));
 });
+export const getLeaderboard = asyncHandler(async (req, res) => {
+  const leaderboard = await Gamification.getTopLeaderboard();
+  return res.status(200).json(new ApiResponse(200, "Leaderboard fetched", leaderboard));
+});

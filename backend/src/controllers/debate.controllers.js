@@ -107,30 +107,50 @@ const deleteSession = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, "Session deleted", {}));
 });
 
-// Generate AI speech for a speaker
 const generateAISpeech = asyncHandler(async (req, res) => {
-  const { speakerRole, motion } = req.body;
+    // 1. Get sessionId from the body, in addition to speakerRole
+    const { sessionId, speakerRole } = req.body;
 
-  if (!speakerRole || !motion) {
-    throw new ApiError(400, "Speaker role and motion are required");
-  }
+    if (!sessionId || !speakerRole) {
+        throw new ApiError(400, "sessionId and speakerRole are required");
+    }
 
-  const prompt = `
-You are an AI debater playing the role of "${speakerRole}" in a "${req.body.debateType}" format debate.
-Debate Motion: "${motion}"
+    // 2. Fetch the session to get the full context (motion and transcript)
+    const session = await DebateSession.findById(sessionId);
+    if (!session) {
+        throw new ApiError(404, "Debate session not found");
+    }
 
-Generate a compelling, structured, formal speech (approx 7 mins in length).
-Avoid repetition, stay relevant, and use standard parliamentary tone.
+    // 3. Create a transcript history for the prompt
+    const transcriptHistory = session.transcript
+        .map(entry => `${entry.speaker}: ${entry.text}`)
+        .join('\n\n'); // Use double newline for better separation
+
+    // 4. Enhance the prompt with the debate history
+    const prompt = `
+You are an expert AI debater performing as "${speakerRole}" in a "${session.debateType}" debate.
+The motion is: "${session.motion}"
+
+Below is the transcript of the debate so far. Your task is to generate the next speech.
+--- DEBATE HISTORY ---
+${transcriptHistory}
+--- END HISTORY ---
+
+Instructions:
+- Your response must be only the speech text for "${speakerRole}".
+- Directly address and rebut arguments made by the opposing team from the transcript.
+- Advance your own team's case with new analysis or evidence.
+- Maintain a formal, persuasive, and structured parliamentary tone.
+- The speech should be approximately 850-950 words.
 `;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const aiSpeech = response.text();
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const aiSpeech = response.text();
 
-  return res.status(200).json(new ApiResponse(200, "AI speech generated", { text: aiSpeech }));
+    return res.status(200).json(new ApiResponse(200, "AI speech generated", { text: aiSpeech }));
 });
-
 const generatePOI = asyncHandler(async (req, res) => {
   const { targetSpeakerRole, currentSpeech, motion } = req.body;
 

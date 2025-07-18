@@ -75,8 +75,13 @@ export const createAdjudication = asyncHandler(async (req, res) => {
   if (!session) throw new ApiError(404, 'Debate session not found');
 
   const adjudicator = req.user._id;
-  const transcript = session.transcript || '';
+  const transcript = session.transcript || [];
   const formatName = session.format;
+
+  // Convert transcript array to a readable string for the AI
+  const transcriptText = transcript.map(
+    entry => `[${entry.speaker}] (${entry.type} @ ${entry.timestamp}): ${entry.text}`
+  ).join('\n');
 
   const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
@@ -95,7 +100,7 @@ export const createAdjudication = asyncHandler(async (req, res) => {
       generationConfig: { temperature: 0.7 },
     });
     await chat.sendMessage(prompt);
-    const result = await chat.sendMessage(transcript);
+    const result = await chat.sendMessage(transcriptText); 
     const rawText = result.response.text().trim();
 
     try {

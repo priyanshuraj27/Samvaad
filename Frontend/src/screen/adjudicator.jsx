@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Award, ChevronsRight, ArrowLeft, Scale, Presentation, BrainCircuit, UserCheck, Star, MessageSquareQuote, Clock, Users, Shield, Swords } from 'lucide-react';
 import axiosInstance from '../utils/axiosinstance';
 
@@ -205,13 +206,16 @@ const DetailedAdjudicationFeedbackScreen = ({ data, onBack }) => {
 const Adjudicator = () => {
   const [debateData, setDebateData] = useState(null);
   const [currentScreen, setCurrentScreen] = useState('results');
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get('sessionId');
 
   useEffect(() => {
+    if (!sessionId) return;
     // Use axiosInstance with credentials (cookies) for authentication
     const fetchAdjudication = async () => {
       try {
         const res = await axiosInstance.post('/adjudications/', {
-          sessionId: '6879fa61e37b4320e17d6e77'
+          sessionId
         });
         setDebateData(res.data.data);
       } catch (err) {
@@ -219,7 +223,7 @@ const Adjudicator = () => {
       }
     };
     fetchAdjudication();
-  }, []);
+  }, [sessionId]);
 
   const handleShowDetails = () => setCurrentScreen('details');
   const handleBackToResults = () => setCurrentScreen('results');
