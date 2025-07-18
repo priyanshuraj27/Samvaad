@@ -1,4 +1,4 @@
-import { DebateSession } from "../models/debate.models.js";
+import { DebateSession } from "../models/debateSession.models.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -7,8 +7,63 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Create a new debate session
+const DEBATE_ROLES = {
+  AP: [
+    { role: "Prime Minister", team: "Government" },
+    { role: "Deputy Prime Minister", team: "Government" },
+    { role: "Government Whip", team: "Government" },
+    { role: "Leader of Opposition", team: "Opposition" },
+    { role: "Deputy Leader of Opposition", team: "Opposition" },
+    { role: "Opposition Whip", team: "Opposition" },
+    { role: "Opposition Reply", team: "Opposition" },
+  ],
+  WS: [
+    { role: "First Speaker (Gov)", team: "Government" },
+    { role: "Second Speaker (Gov)", team: "Government" },
+    { role: "Third Speaker (Gov)", team: "Government" },
+    { role: "First Speaker (Opp)", team: "Opposition" },
+    { role: "Second Speaker (Opp)", team: "Opposition" },
+    { role: "Third Speaker (Opp)", team: "Opposition" },
+  ],
+  BP: [
+    { role: "Prime Minister", team: "Opening Government" },
+    { role: "Deputy Prime Minister", team: "Opening Government" },
+    { role: "Leader of Opposition", team: "Opening Opposition" },
+    { role: "Deputy Leader of Opposition", team: "Opening Opposition" },
+    { role: "Member of Government", team: "Closing Government" },
+    { role: "Government Whip", team: "Closing Government" },
+    { role: "Member of Opposition", team: "Closing Opposition" },
+    { role: "Opposition Whip", team: "Closing Opposition" },
+  ],
+};
+
 const createSession = asyncHandler(async (req, res) => {
-  const { title, debateType, motion, userRole, participants } = req.body;
+  const { title, debateType, motion, userRole } = req.body;
+
+  if (!title || !debateType || !motion || !userRole) {
+    throw new ApiError(400, "title, debateType, motion, and userRole are required");
+  }
+
+  const roleMap = DEBATE_ROLES[debateType];
+  if (!roleMap) throw new ApiError(400, "Unsupported debate format");
+
+  const participants = roleMap.map(({ role, team }) => {
+    if (role === userRole) {
+      return {
+        name: req.user.name || "You",
+        isAI: false,
+        role,
+        team,
+      };
+    } else {
+      return {
+        name: role, // Role is directly the AI name
+        isAI: true,
+        role,
+        team,
+      };
+    }
+  });
 
   const session = await DebateSession.create({
     title,
@@ -19,7 +74,9 @@ const createSession = asyncHandler(async (req, res) => {
     participants,
   });
 
-  return res.status(201).json(new ApiResponse(201, session, "Debate session created"));
+  return res
+    .status(201)
+    .json(new ApiResponse(201, session, "Debate session created"));
 });
 
 // Get all sessions for the logged-in user

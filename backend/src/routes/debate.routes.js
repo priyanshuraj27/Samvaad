@@ -11,14 +11,14 @@ import {
 
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
-const router = express.Router();
+const debateRouter = express.Router();
 
-router.post("/", verifyJWT, createSession);
-router.get("/", verifyJWT, getAllSessions);
-router.get("/:id", verifyJWT, getSessionById);
-router.put("/:id", verifyJWT, updateSession);
-router.delete("/:id", verifyJWT, deleteSession);
-router.post("/generate-poi", verifyJWT, generatePOI);
-router.post("/generate-speech", verifyJWT, generateAISpeech);
+debateRouter.post("/", verifyJWT, createSession);
+debateRouter.get("/", verifyJWT, getAllSessions);
+debateRouter.get("/:id", verifyJWT, getSessionById);
+debateRouter.put("/:id", verifyJWT, updateSession);
+debateRouter.delete("/:id", verifyJWT, deleteSession);
+debateRouter.post("/generate-poi", verifyJWT, generatePOI);
+debateRouter.post("/generate-speech", verifyJWT, generateAISpeech);
 
-export default router;
+export default debateRouter;
