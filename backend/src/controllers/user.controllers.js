@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.models.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import { Gamification } from "../models/gamification.models.js"; // <-- Add this import
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -40,13 +41,17 @@ const registerUser = asyncHandler(async (req, res) => {
     username: username.toLowerCase(),
   });
 
+  // Create gamification record with 75 XP for the new user
+  await Gamification.create({ user: user._id }); // xp defaults to 75
+
   const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
   if (!createdUser) {
     throw new ApiError(500, "User not created");
   }
 
-  return res.status(201).json(new ApiResponse(200, "User created", createdUser));
+  // Changed: message and data placement
+  return res.status(201).json(new ApiResponse(201, "User created", createdUser));
 });
 
 const loginUser = asyncHandler(async (req, res) => {
@@ -76,18 +81,19 @@ const loginUser = asyncHandler(async (req, res) => {
     sameSite: isProd ? "None" : "Lax",
   };
 
+  // Changed: message and data placement
   return res
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
     .cookie("refreshToken", refreshToken, cookieOptions)
     .json(new ApiResponse(
       200,
+      "User logged in",
       {
         user: loggedInUser,
         accessToken,
         refreshToken,
-      },
-      "User logged in"
+      }
     ));
 });
 
@@ -100,10 +106,11 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   const options = { httpOnly: true, secure: true };
 
+  // Changed: message and data placement
   return res.status(200)
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
-    .json(new ApiResponse(200, undefined, "User logged out"));
+    .json(new ApiResponse(200, "User logged out", undefined));
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
@@ -133,11 +140,12 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
     const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user._id);
 
+    // Changed: message and data placement
     return res
       .status(200)
       .cookie("accessToken", accessToken, options)
       .cookie("refreshToken", newRefreshToken, options)
-      .json(new ApiResponse(200, { accessToken, refreshToken: newRefreshToken }, "Access token refreshed"));
+      .json(new ApiResponse(200, "Access token refreshed", { accessToken, refreshToken: newRefreshToken }));
   } catch (error) {
     throw new ApiError(401, error?.message || "Invalid refresh token");
   }
@@ -163,7 +171,8 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   user.password = newPassword;
   await user.save({ validateBeforeSave: false });
 
-  return res.status(200).json(new ApiResponse(200, {}, "Password Changed Successfully"));
+  // Changed: message and data placement
+  return res.status(200).json(new ApiResponse(200, "Password Changed Successfully", {}));
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
@@ -171,7 +180,8 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(404, "User not found");
   }
-  return res.status(200).json(new ApiResponse(200, req.user, "Current User Fetched Successfully"));
+  // Changed: message and data placement
+  return res.status(200).json(new ApiResponse(200, "Current User Fetched Successfully", req.user));
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
@@ -187,7 +197,8 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     { new: true }
   ).select("-password");
 
-  return res.status(200).json(new ApiResponse(200, user, "Account details updated successfully"));
+  // Changed: message and data placement
+  return res.status(200).json(new ApiResponse(200, "Account details updated successfully", user));
 });
 
 const isLoggedIn = asyncHandler(async (req, res) => {
@@ -195,7 +206,8 @@ const isLoggedIn = asyncHandler(async (req, res) => {
   if(!user) {
     throw new ApiError(401, "Unauthorized request");
   }
-  return res.status(200).json(new ApiResponse(200, user, "User is logged in"));
+  // Changed: message and data placement
+  return res.status(200).json(new ApiResponse(200, "User is logged in", user));
 });
 
 const deleteUser = asyncHandler(async (req, res) => {
@@ -204,8 +216,10 @@ const deleteUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
-  return res.status(200).json(new ApiResponse(200, {}, "User deleted successfully"));
+  // Changed: message and data placement
+  return res.status(200).json(new ApiResponse(200, "User deleted successfully", {}));
 });
+
 export {
   registerUser,
   loginUser,

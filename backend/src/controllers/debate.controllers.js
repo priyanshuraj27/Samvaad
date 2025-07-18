@@ -74,36 +74,37 @@ const createSession = asyncHandler(async (req, res) => {
     participants,
   });
 
+  // Changed: message and data placement
   return res
     .status(201)
-    .json(new ApiResponse(201, session, "Debate session created"));
+    .json(new ApiResponse(201, "Debate session created", session));
 });
 
 // Get all sessions for the logged-in user
 const getAllSessions = asyncHandler(async (req, res) => {
   const sessions = await DebateSession.find({ user: req.user._id }).sort({ createdAt: -1 });
-  return res.status(200).json(new ApiResponse(200, sessions, "Sessions fetched"));
+  return res.status(200).json(new ApiResponse(200, "Sessions fetched", sessions));
 });
 
 // Get a specific session by ID
 const getSessionById = asyncHandler(async (req, res) => {
   const session = await DebateSession.findById(req.params.id);
   if (!session) throw new ApiError(404, "Session not found");
-  return res.status(200).json(new ApiResponse(200, session, "Session fetched"));
+  return res.status(200).json(new ApiResponse(200, "Session fetched", session));
 });
 
 // Update a session (e.g., add transcript, adjudication)
 const updateSession = asyncHandler(async (req, res) => {
   const updated = await DebateSession.findByIdAndUpdate(req.params.id, req.body, { new: true });
   if (!updated) throw new ApiError(404, "Session not found");
-  return res.status(200).json(new ApiResponse(200, updated, "Session updated"));
+  return res.status(200).json(new ApiResponse(200, "Session updated", updated));
 });
 
 // Delete a session
 const deleteSession = asyncHandler(async (req, res) => {
   const deleted = await DebateSession.findByIdAndDelete(req.params.id);
   if (!deleted) throw new ApiError(404, "Session not found");
-  return res.status(200).json(new ApiResponse(200, {}, "Session deleted"));
+  return res.status(200).json(new ApiResponse(200, "Session deleted", {}));
 });
 
 // Generate AI speech for a speaker
@@ -127,8 +128,9 @@ Avoid repetition, stay relevant, and use standard parliamentary tone.
   const response = await result.response;
   const aiSpeech = response.text();
 
-  return res.status(200).json(new ApiResponse(200, { text: aiSpeech }, "AI speech generated"));
+  return res.status(200).json(new ApiResponse(200, "AI speech generated", { text: aiSpeech }));
 });
+
 const generatePOI = asyncHandler(async (req, res) => {
   const { targetSpeakerRole, currentSpeech, motion } = req.body;
 
@@ -151,7 +153,7 @@ Generate a short and sharp Point of Information (POI) — a question or rebuttal
   const response = await result.response;
   const poi = response.text().trim();
 
-  return res.status(200).json(new ApiResponse(200, { poi }, "POI generated"));
+  return res.status(200).json(new ApiResponse(200, "POI generated", { poi }));
 });
 export {
   createSession,

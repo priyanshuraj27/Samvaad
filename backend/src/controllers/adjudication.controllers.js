@@ -121,14 +121,14 @@ export const createAdjudication = asyncHandler(async (req, res) => {
 
   return res
     .status(201)
-    .json(new ApiResponse(201, adjudication, 'Adjudication created'));
+    .json(new ApiResponse(201, "Adjudication created", adjudication));
 });
 
 export const getAllAdjudications = asyncHandler(async (req, res) => {
   const adjudications = await Adjudication.find()
     .populate('session')
     .populate('adjudicator');
-  return res.status(200).json(new ApiResponse(200, adjudications));
+  return res.status(200).json(new ApiResponse(200, "Adjudications fetched", adjudications));
 });
 
 export const getAdjudicationById = asyncHandler(async (req, res) => {
@@ -136,7 +136,7 @@ export const getAdjudicationById = asyncHandler(async (req, res) => {
     .populate('session')
     .populate('adjudicator');
   if (!adjudication) throw new ApiError(404, 'Adjudication not found');
-  return res.status(200).json(new ApiResponse(200, adjudication));
+  return res.status(200).json(new ApiResponse(200, "Adjudication fetched", adjudication));
 });
 
 export const updateAdjudication = asyncHandler(async (req, res) => {
@@ -144,11 +144,11 @@ export const updateAdjudication = asyncHandler(async (req, res) => {
     new: true,
   });
   if (!updated) throw new ApiError(404, 'Adjudication not found');
-  return res.status(200).json(new ApiResponse(200, updated, 'Adjudication updated'));
+  return res.status(200).json(new ApiResponse(200, "Adjudication updated", updated));
 });
 
 export const deleteAdjudication = asyncHandler(async (req, res) => {
   const deleted = await Adjudication.findByIdAndDelete(req.params.id);
   if (!deleted) throw new ApiError(404, 'Adjudication not found');
-  return res.status(200).json(new ApiResponse(200, null, 'Adjudication deleted'));
+  return res.status(200).json(new ApiResponse(200, "Adjudication deleted", null));
 });

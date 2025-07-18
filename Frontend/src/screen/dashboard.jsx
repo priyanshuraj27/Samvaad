@@ -3,7 +3,6 @@ import { BarChart3, Swords, Target, Activity, BrainCircuit, BookOpen, ChevronRig
 // const navigate = require('react-router-dom').useNavigate ? require('react-router-dom').useNavigate : () => {};
 import { useNavigate } from 'react-router-dom';
 
-// Mock user data - in a real app, this would come from state or props
 const userData = {
     name: 'Alex',
     avatarUrl: 'https://placehold.co/100x100/7c3aed/ffffff?text=A',

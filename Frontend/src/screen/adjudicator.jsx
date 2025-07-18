@@ -1,120 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Award, ChevronsRight, ArrowLeft, Scale, Presentation, BrainCircuit, UserCheck, Star, MessageSquareQuote, Clock, Users, Shield, Swords } from 'lucide-react';
+import axiosInstance from '../utils/axiosinstance';
 
-// --- MOCK DATA STORE ---
-// In a real application, this data would be fetched from a database using a debateId.
-const mockDatabase = {
-  AP: {
-    formatName: 'Asian Parliamentary (AP)',
-    overallWinner: 'Proposition',
-    teamRankings: [
-      { rank: 1, team: 'Proposition', score: 221.5 },
-      { rank: 2, team: 'Opposition', score: 218.0 },
-    ],
-    scorecard: {
-      proposition: { matter: 45, manner: 46, method: 44.5, total: 135.5, color: 'green' },
-      opposition: { matter: 44, manner: 45, method: 43, total: 132, color: 'red' },
-    },
-    chainOfThought: { 
-        title: "AI Adjudicator's Chain-of-Thought Verdict",
-        clashes: [
-            { id: 1, title: 'Economic Impact of Renewable Energy Subsidies', weight: 40, winner: 'Proposition', summary: 'Proposition successfully argued that long-term economic benefits and job creation outweigh the immediate fiscal costs. Their evidence on green tech market growth was more compelling and recent than Opposition\'s focus on traditional energy sector displacement.'},
-            { id: 2, title: 'Social Equity and Access to Clean Energy', weight: 35, winner: 'Proposition', summary: 'While Opposition raised valid points about the regressive nature of some subsidies, Proposition\'s model for community-based solar initiatives provided a stronger, more forward-looking solution to the equity problem.'},
-            { id: 3, title: 'Feasibility and Timescale of Transition', weight: 25, winner: 'Opposition', summary: 'Opposition effectively highlighted the logistical and infrastructural hurdles of a rapid transition. Their use of expert testimony on grid limitations was a key point that Proposition failed to adequately rebut.'},
-        ]
-    },
-    detailedFeedback: {
-      speakers: [
-        { name: 'Alex (PM)', team: 'Proposition', scores: { matter: 46, manner: 47, method: 45, total: 138 }, roleFulfillment: 'Excellent. Clearly set up the debate, defined terms, and presented a strong, coherent case. The roadmap was clear and followed throughout.', rhetoricalAnalysis: 'Used powerful anaphora in the opening to build momentum. The "A future powered by..." repetition was highly effective.', timestampedComments: [{ time: '02:15', comment: 'Strong use of a statistical evidence from the IEA report to substantiate the primary claim.' },{ time: '06:45', comment: 'Effectively handled a Point of Information, turning it into an opportunity to reinforce their own case.' },] },
-        { name: 'Ben (LO)', team: 'Opposition', scores: { matter: 45, manner: 46, method: 44, total: 135 }, roleFulfillment: 'Good. Directly clashed with the PM and established the core of the opposition\'s case. Could have been more explicit in outlining the team\'s split.', rhetoricalAnalysis: 'Relied on a strong, confident tone. The use of rhetorical questions was good, but could have been paired with more emotional appeals.', timestampedComments: [{ time: '09:30', comment: 'Excellent point on the unforeseen consequences of subsidy policies, but needed a specific real-world example.' },{ time: '14:00', comment: 'Well-structured rebuttal, but spent slightly too much time on the first point.' },] },
-        { name: 'Chloe (DPM)', team: 'Proposition', scores: { matter: 45, manner: 45, method: 44, total: 134 }, roleFulfillment: 'Solid. Rebuilt the case well and introduced new material effectively. The integration of rebuttal and new points was seamless.', rhetoricalAnalysis: 'Great use of a personal anecdote to make the social equity argument more relatable and impactful.', timestampedComments: [{ time: '18:20', comment: 'The explanation of the community solar model was clear and persuasive.' },{ time: '22:50', comment: 'Could have been more aggressive in attacking the opposition\'s main plank on feasibility.' },] },
-        { name: 'David (DLO)', team: 'Opposition', scores: { matter: 43, manner: 44, method: 42, total: 129 }, roleFulfillment: 'Fair. Offered good rebuttal but the new material felt disconnected from the leader\'s speech. Needed to better signpost their arguments.', rhetoricalAnalysis: 'Used a logical, step-by-step deconstruction of the proposition\'s main argument, which was effective but a bit dry.', timestampedComments: [{ time: '26:10', comment: 'Strongest point was on the grid infrastructure, well-supported by evidence.' },{ time: '30:05', comment: 'The conclusion felt rushed and did not fully summarize the opposition\'s case.' },] },
-        { name: 'Eva (Gov. Whip)', team: 'Proposition', scores: { matter: 44, manner: 45, method: 43, total: 132 }, roleFulfillment: 'Effectively summarized key clashes and crystallized the debate for the government side.', rhetoricalAnalysis: 'Used strong, decisive language in the final minutes.', timestampedComments: [] },
-        { name: 'Frank (Opp. Whip)', team: 'Opposition', scores: { matter: 43, manner: 44, method: 44, total: 131 }, roleFulfillment: 'Provided a good overview but could have been more strategic in identifying voting issues.', rhetoricalAnalysis: 'Passionate delivery, but structure could have been clearer.', timestampedComments: [] },
-      ],
-      replySpeeches: {
-        proposition: { speaker: 'Alex (PM)', score: 45, summary: 'Effectively crystallized the main voting issues from the government\'s perspective, clearly contrasting with the opposition\'s world.' },
-        opposition: { speaker: 'Ben (LO)', score: 44, summary: 'Provided a passionate summary but missed a key opportunity to frame the central clash around feasibility.' },
-      },
-      criteria: { /* ... */ }
-    },
-  },
-  WS: {
-    formatName: 'World Schools (WS)',
-    overallWinner: 'Proposition',
-    teamRankings: [
-        { rank: 1, team: 'Proposition', score: 221.5 },
-        { rank: 2, team: 'Opposition', score: 218.0 },
-    ],
-    scorecard: {
-        proposition: { matter: 45, manner: 46, method: 44.5, total: 135.5, color: 'green' },
-        opposition: { matter: 44, manner: 45, method: 43, total: 132, color: 'red' },
-    },
-    chainOfThought: { 
-        title: "AI Adjudicator's Chain-of-Thought Verdict",
-        clashes: [
-            { id: 1, title: 'Economic Impact of Renewable Energy Subsidies', weight: 40, winner: 'Proposition', summary: 'Proposition successfully argued that long-term economic benefits and job creation outweigh the immediate fiscal costs. Their evidence on green tech market growth was more compelling and recent than Opposition\'s focus on traditional energy sector displacement.'},
-            { id: 2, title: 'Social Equity and Access to Clean Energy', weight: 35, winner: 'Proposition', summary: 'While Opposition raised valid points about the regressive nature of some subsidies, Proposition\'s model for community-based solar initiatives provided a stronger, more forward-looking solution to the equity problem.'},
-            { id: 3, title: 'Feasibility and Timescale of Transition', weight: 25, winner: 'Opposition', summary: 'Opposition effectively highlighted the logistical and infrastructural hurdles of a rapid transition. Their use of expert testimony on grid limitations was a key point that Proposition failed to adequately rebut.'},
-        ]
-    },
-    detailedFeedback: {
-        speakers: [
-            { name: 'Alex (1st Prop)', team: 'Proposition', scores: { matter: 46, manner: 47, method: 45, total: 138 }, roleFulfillment: 'Excellent. Clearly set up the debate, defined terms, and presented a strong, coherent case. The roadmap was clear and followed throughout.', rhetoricalAnalysis: 'Used powerful anaphora in the opening to build momentum. The "A future powered by..." repetition was highly effective.', timestampedComments: [{ time: '02:15', comment: 'Strong use of a statistical evidence from the IEA report to substantiate the primary claim.' },{ time: '06:45', comment: 'Effectively handled a Point of Information, turning it into an opportunity to reinforce their own case.' },] },
-            { name: 'Ben (1st Opp)', team: 'Opposition', scores: { matter: 45, manner: 46, method: 44, total: 135 }, roleFulfillment: 'Good. Directly clashed with the PM and established the core of the opposition\'s case. Could have been more explicit in outlining the team\'s split.', rhetoricalAnalysis: 'Relied on a strong, confident tone. The use of rhetorical questions was good, but could have been paired with more emotional appeals.', timestampedComments: [{ time: '09:30', comment: 'Excellent point on the unforeseen consequences of subsidy policies, but needed a specific real-world example.' },{ time: '14:00', comment: 'Well-structured rebuttal, but spent slightly too much time on the first point.' },] },
-            { name: 'Chloe (2nd Prop)', team: 'Proposition', scores: { matter: 45, manner: 45, method: 44, total: 134 }, roleFulfillment: 'Solid. Rebuilt the case well and introduced new material effectively. The integration of rebuttal and new points was seamless.', rhetoricalAnalysis: 'Great use of a personal anecdote to make the social equity argument more relatable and impactful.', timestampedComments: [{ time: '18:20', comment: 'The explanation of the community solar model was clear and persuasive.' },{ time: '22:50', comment: 'Could have been more aggressive in attacking the opposition\'s main plank on feasibility.' },] },
-            { name: 'David (2nd Opp)', team: 'Opposition', scores: { matter: 43, manner: 44, method: 42, total: 129 }, roleFulfillment: 'Fair. Offered good rebuttal but the new material felt disconnected from the leader\'s speech. Needed to better signpost their arguments.', rhetoricalAnalysis: 'Used a logical, step-by-step deconstruction of the proposition\'s main argument, which was effective but a bit dry.', timestampedComments: [{ time: '26:10', comment: 'Strongest point was on the grid infrastructure, well-supported by evidence.' },{ time: '30:05', comment: 'The conclusion felt rushed and did not fully summarize the opposition\'s case.' },] },
-            { name: 'Eva (3rd Prop)', team: 'Proposition', scores: { matter: 44, manner: 45, method: 43, total: 132 }, roleFulfillment: 'Strong rebuttal and case extension. Successfully defended the proposition\'s core arguments against sustained attack.', rhetoricalAnalysis: 'Excellent use of humor to disarm an opponent\'s point.', timestampedComments: [] },
-            { name: 'Frank (3rd Opp)', team: 'Opposition', scores: { matter: 43, manner: 44, method: 44, total: 131 }, roleFulfillment: 'Focused heavily on rebuttal, which was effective but left their own case underdeveloped.', rhetoricalAnalysis: 'Maintained a calm and composed demeanor under pressure.', timestampedComments: [] },
-        ],
-        replySpeeches: {
-            proposition: { speaker: 'Chloe (2nd Prop)', score: 45, summary: 'A clear, concise, and persuasive summary of the debate from their side\'s perspective.' },
-            opposition: { speaker: 'David (2nd Opp)', score: 44, summary: 'Good summary, but could have more directly addressed the "even if" scenarios proposed by the proposition.' },
-        },
-        criteria: { /* ... */ }
-    }
-  },
-  BP: {
-    formatName: 'British Parliamentary (BP)',
-    overallWinner: 'Opening Government',
-    teamRankings: [
-      { rank: 1, team: 'Opening Government', score: 275.5 },
-      { rank: 2, team: 'Closing Opposition', score: 272.0 },
-      { rank: 3, team: 'Closing Government', score: 271.0 },
-      { rank: 4, team: 'Opening Opposition', score: 270.0 },
-    ],
-    scorecard: {
-      'Opening Government': { matter: 45, manner: 46, method: 44.5, total: 135.5, color: 'blue' },
-      'Opening Opposition': { matter: 44, manner: 45, method: 43, total: 132, color: 'red' },
-      'Closing Government': { matter: 44, manner: 45.5, method: 43.5, total: 133, color: 'cyan' },
-      'Closing Opposition': { matter: 45, manner: 46, method: 44, total: 135, color: 'orange' },
-    },
-    chainOfThought: { /* ... */ },
-    detailedFeedback: {
-      speakers: [
-        { name: 'Alex (PM)', team: 'Opening Government', scores: { matter: 46, manner: 47, method: 45, total: 138 }, roleFulfillment: 'Excellent. Clearly set up the debate, defined terms, and presented a strong, coherent case. The roadmap was clear and followed throughout.', rhetoricalAnalysis: 'Used powerful anaphora in the opening to build momentum. The "A future powered by..." repetition was highly effective.', timestampedComments: [{ time: '02:15', comment: 'Strong use of a statistical evidence from the IEA report to substantiate the primary claim.' },{ time: '06:45', comment: 'Effectively handled a Point of Information, turning it into an opportunity to reinforce their own case.' },] },
-        { name: 'Ben (LO)', team: 'Opening Opposition', scores: { matter: 45, manner: 46, method: 44, total: 135 }, roleFulfillment: 'Good. Directly clashed with the PM and established the core of the opposition\'s case. Could have been more explicit in outlining the team\'s split.', rhetoricalAnalysis: 'Relied on a strong, confident tone. The use of rhetorical questions was good, but could have been paired with more emotional appeals.', timestampedComments: [{ time: '09:30', comment: 'Excellent point on the unforeseen consequences of subsidy policies, but needed a specific real-world example.' },{ time: '14:00', comment: 'Well-structured rebuttal, but spent slightly too much time on the first point.' },] },
-        { name: 'Chloe (DPM)', team: 'Opening Government', scores: { matter: 45, manner: 45, method: 44, total: 134 }, roleFulfillment: 'Solid. Rebuilt the case well and introduced new material effectively. The integration of rebuttal and new points was seamless.', rhetoricalAnalysis: 'Great use of a personal anecdote to make the social equity argument more relatable and impactful.', timestampedComments: [{ time: '18:20', comment: 'The explanation of the community solar model was clear and persuasive.' },{ time: '22:50', comment: 'Could have been more aggressive in attacking the opposition\'s main plank on feasibility.' },] },
-        { name: 'David (DLO)', team: 'Opening Opposition', scores: { matter: 43, manner: 44, method: 42, total: 129 }, roleFulfillment: 'Fair. Offered good rebuttal but the new material felt disconnected from the leader\'s speech. Needed to better signpost their arguments.', rhetoricalAnalysis: 'Used a logical, step-by-step deconstruction of the proposition\'s main argument, which was effective but a bit dry.', timestampedComments: [{ time: '26:10', comment: 'Strongest point was on the grid infrastructure, well-supported by evidence.' },{ time: '30:05', comment: 'The conclusion felt rushed and did not fully summarize the opposition\'s case.' },] },
-        { name: 'Eva (Member for Gov)', team: 'Closing Government', scores: { matter: 44, manner: 45.5, method: 43.5, total: 133 }, roleFulfillment: 'Brought a crucial extension that shifted the focus of the back-half. Clearly differentiated from OG.', rhetoricalAnalysis: 'Used a powerful metaphor that was referenced by later speakers.', timestampedComments: [] },
-        { name: 'Frank (Member for Opp)', team: 'Closing Opposition', scores: { matter: 45, manner: 46, method: 44, total: 135 }, roleFulfillment: 'Excellent engagement with the CG extension and summarized the entire opposition bench effectively.', rhetoricalAnalysis: 'Strong, authoritative tone.', timestampedComments: [] },
-        { name: 'Grace (Gov Whip)', team: 'Closing Government', scores: { matter: 43, manner: 44, method: 43, total: 130 }, roleFulfillment: 'Good summary, but could have more clearly weighed the clashes between CG and CO.', rhetoricalAnalysis: 'Clear and structured delivery.', timestampedComments: [] },
-        { name: 'Harry (Opp Whip)', team: 'Closing Opposition', scores: { matter: 44, manner: 45, method: 44, total: 133 }, roleFulfillment: 'Provided a comprehensive summary of the debate from a CO perspective, identifying key voting issues.', rhetoricalAnalysis: 'Passionate and persuasive closing.', timestampedComments: [] },
-      ],
-      criteria: { /* ... */ }
-    },
-  },
-};
-
-// --- UI COMPONENTS (Card, ScoreBar) remain the same ---
-
+// --- UI COMPONENTS (Card, ScoreBar) ---
 const Card = ({ children, className = '' }) => (
     <div className={`bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-lg p-6 ${className}`}>
       {children}
     </div>
 );
 
-const ScoreBar = ({ label, score, maxScore = 50, color = 'cyan' }) => {
+const ScoreBar = ({ label, score, maxScore = 100, color = 'cyan' }) => {
     const colorClasses = {
         cyan: 'from-cyan-500 to-blue-500',
         green: 'from-green-500 to-emerald-500',
@@ -138,8 +33,8 @@ const ScoreBar = ({ label, score, maxScore = 50, color = 'cyan' }) => {
 // --- SCREENS ---
 
 const AdjudicationResultsScreen = ({ data, onShowDetails }) => {
-  const { formatName, overallWinner, teamRankings, scorecard, chainOfThought } = data;
-  const teamColors = { 'Proposition': 'green', 'Opposition': 'red', 'Opening Government': 'blue', 'Opening Opposition': 'red', 'Closing Government': 'cyan', 'Closing Opposition': 'orange' };
+  const { overallWinner, teamRankings, scorecard, chainOfThought } = data;
+  const teamColors = { 'Government': 'blue', 'Opposition': 'red', 'Proposition': 'green' };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans p-4 sm:p-6 lg:p-8">
@@ -149,7 +44,6 @@ const AdjudicationResultsScreen = ({ data, onShowDetails }) => {
                 <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">
                     AI Adjudication Results
                 </h1>
-                <p className="text-gray-400 mt-2 text-lg font-semibold">{formatName}</p>
             </div>
         </header>
         <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -162,9 +56,9 @@ const AdjudicationResultsScreen = ({ data, onShowDetails }) => {
               <h2 className="text-2xl font-semibold mb-4 text-white">Team Rankings</h2>
               <ul className="space-y-3">
                 {teamRankings.map(({ rank, team, score }) => (
-                  <li key={rank} className={`flex items-center justify-between p-3 bg-gray-700/50 rounded-lg border-l-4 border-${teamColors[team]}-500`}>
+                  <li key={rank} className={`flex items-center justify-between p-3 bg-gray-700/50 rounded-lg border-l-4 border-${teamColors[team] || 'cyan'}-500`}>
                     <span className="text-lg font-bold">{rank}. {team}</span>
-                    <span className={`text-xl font-semibold text-cyan-400`}>{score.toFixed(1)}</span>
+                    <span className={`text-xl font-semibold text-cyan-400`}>{score}</span>
                   </li>
                 ))}
               </ul>
@@ -196,8 +90,10 @@ const AdjudicationResultsScreen = ({ data, onShowDetails }) => {
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-2">
                       <h3 className="text-xl font-semibold text-white">{clash.title}</h3>
                       <div className="flex items-center mt-2 sm:mt-0">
-                        <span className="text-sm text-gray-400 mr-4">Weight: {clash.weight}%</span>
-                        <span className={`px-3 py-1 text-sm font-bold rounded-full bg-${teamColors[clash.winner]}-500/20 text-${teamColors[clash.winner]}-400`}>Won by {clash.winner}</span>
+                        <span className="text-sm text-gray-400 mr-4">Weight: {typeof clash.weight === 'number' ? `${Math.round(clash.weight * 100)}%` : clash.weight}</span>
+                        <span className={`px-3 py-1 text-sm font-bold rounded-full bg-${teamColors[clash.winner] || 'gray'}-500/20 text-${teamColors[clash.winner] || 'gray'}-400`}>
+                          {clash.winner ? `Won by ${clash.winner}` : 'Unclear'}
+                        </span>
                       </div>
                     </div>
                     <p className="text-gray-300">{clash.summary}</p>
@@ -217,18 +113,18 @@ const AdjudicationResultsScreen = ({ data, onShowDetails }) => {
   );
 };
 
-const DetailedAdjudicationFeedbackScreen = ({ data, onBack, formatName }) => {
-    const { speakers, criteria, replySpeeches } = data;
-    const teamColors = {'Proposition': 'green', 'Opposition': 'red', 'Opening Government': 'blue', 'Opening Opposition': 'red', 'Closing Government': 'cyan', 'Closing Opposition': 'orange'};
+const DetailedAdjudicationFeedbackScreen = ({ data, onBack }) => {
+    const { speakers, replySpeeches } = data;
+    const teamColors = {'Government': 'blue', 'Opposition': 'red', 'Proposition': 'green'};
     const SpeakerCard = ({ speaker }) => (
         <div className="bg-gray-800/60 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-lg p-6 space-y-4 transform hover:border-cyan-500 transition-all duration-300">
             <div className="flex justify-between items-start">
                 <div>
                     <h3 className="text-2xl font-bold text-white">{speaker.name}</h3>
-                    <p className={`font-semibold text-${teamColors[speaker.team]}-400`}>{speaker.team}</p>
+                    <p className={`font-semibold text-${teamColors[speaker.team] || 'cyan'}-400`}>{speaker.team}</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-3xl font-bold text-cyan-400">{speaker.scores.total.toFixed(0)}</p>
+                    <p className="text-3xl font-bold text-cyan-400">{speaker.scores.total}</p>
                     <p className="text-sm text-gray-400">Total Score</p>
                 </div>
             </div>
@@ -266,7 +162,7 @@ const DetailedAdjudicationFeedbackScreen = ({ data, onBack, formatName }) => {
             </h3>
             <div className="flex justify-between items-center mb-2 text-gray-400">
                 <span>Speaker: <span className="font-semibold text-white">{data.speaker}</span></span>
-                <span>Score: <span className="font-bold text-xl text-cyan-400">{data.score}/50</span></span>
+                <span>Score: <span className="font-bold text-xl text-cyan-400">{data.score}</span></span>
             </div>
             <p className="text-gray-300 bg-gray-900/50 p-3 rounded-md">{data.summary}</p>
         </Card>
@@ -282,7 +178,6 @@ const DetailedAdjudicationFeedbackScreen = ({ data, onBack, formatName }) => {
                         <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">
                             Detailed Feedback
                         </h1>
-                        <p className="text-gray-400 mt-2 text-lg font-semibold">{formatName}</p>
                     </div>
                 </header>
                 {replySpeeches && (
@@ -305,25 +200,30 @@ const DetailedAdjudicationFeedbackScreen = ({ data, onBack, formatName }) => {
     );
 };
 
-
 // --- MAIN APP CONTROLLER ---
 
 const Adjudicator = () => {
   const [debateData, setDebateData] = useState(null);
-  const [currentScreen, setCurrentScreen] = useState('results'); // 'results' or 'details'
+  const [currentScreen, setCurrentScreen] = useState('results');
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const formatFromUrl = urlParams.get('format');
-    const validFormats = ['AP', 'WS', 'BP'];
-    const finalFormat = validFormats.includes(formatFromUrl) ? formatFromUrl : 'WS';
-    setDebateData(mockDatabase[finalFormat]);
+    // Use axiosInstance with credentials (cookies) for authentication
+    const fetchAdjudication = async () => {
+      try {
+        const res = await axiosInstance.post('/adjudications/', {
+          sessionId: '6879fa61e37b4320e17d6e77'
+        });
+        setDebateData(res.data.data);
+      } catch (err) {
+        setDebateData(null);
+      }
+    };
+    fetchAdjudication();
   }, []);
 
   const handleShowDetails = () => setCurrentScreen('details');
   const handleBackToResults = () => setCurrentScreen('results');
 
-  // Show a loading state until the data is loaded
   if (!debateData) {
       return (
           <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center">
@@ -335,7 +235,7 @@ const Adjudicator = () => {
 
   switch (currentScreen) {
     case 'details':
-      return <DetailedAdjudicationFeedbackScreen data={debateData.detailedFeedback} onBack={handleBackToResults} formatName={debateData.formatName} />;
+      return <DetailedAdjudicationFeedbackScreen data={debateData.detailedFeedback} onBack={handleBackToResults} />;
     case 'results':
     default:
       return <AdjudicationResultsScreen data={debateData} onShowDetails={handleShowDetails} />;

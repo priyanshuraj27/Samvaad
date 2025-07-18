@@ -1,6 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
-import fs from "fs"; // Import file system module
+import fs from "fs"; 
 
 dotenv.config();
 
