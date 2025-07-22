@@ -6,9 +6,20 @@ const apiBaseURL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 const axiosInstance = axios.create({
   baseURL: apiBaseURL,
   withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
+
+// Add request interceptor to handle FormData properly
+axiosInstance.interceptors.request.use(
+  (config) => {
+    // Only set JSON content type if data is not FormData
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 export default axiosInstance;

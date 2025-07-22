@@ -1,75 +1,93 @@
 import mongoose from 'mongoose';
 
-const TimestampedCommentSchema = new mongoose.Schema({
-  time: String,
-  comment: String,
-}, { _id: false });
-
-const SpeakerSchema = new mongoose.Schema({
-  name: String,
-  team: String,
-  scores: {
-    matter: Number,
-    manner: Number,
-    method: Number,
-    total: Number
-  },
-  roleFulfillment: String,
-  rhetoricalAnalysis: String,
-  timestampedComments: [TimestampedCommentSchema]
-}, { _id: false });
-
-const ReplySpeechSchema = new mongoose.Schema({
-  speaker: String,
-  score: Number,
-  summary: String
-}, { _id: false });
-
-const ClashSchema = new mongoose.Schema({
-  id: String,
-  title: String,
-  weight: Number,
-  winner: String,
-  summary: String
-}, { _id: false });
-
-const ScorecardSchema = new mongoose.Schema({
-  matter: Number,
-  manner: Number,
-  method: Number,
-  color: String
-}, { _id: false });
-
-const AdjudicationSchema = new mongoose.Schema({
+const adjudicationSchema = new mongoose.Schema({
   session: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'DebateSession',
-    required: true
+    required: false
   },
   adjudicator: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  formatName: String,
-  overallWinner: String,
+  formatName: {
+    type: String,
+    required: true
+  },
+  motion: {
+    type: String,
+    required: false
+  },
+  teams: {
+    type: mongoose.Schema.Types.Mixed,
+    required: false
+  },
+  transcriptSource: {
+    type: String,
+    enum: ['session', 'upload'],
+    default: 'session'
+  },
+  originalFileName: {
+    type: String,
+    required: false
+  },
+  overallWinner: {
+    type: String,
+    required: true
+  },
   teamRankings: [{
-    rank: Number,
-    team: String,
-    score: Number
+    rank: { type: Number, required: true },
+    team: { type: String, required: true },
+    score: { type: Number, required: true }
   }],
-  scorecard: mongoose.Schema.Types.Mixed,
+  scorecard: {
+    type: mongoose.Schema.Types.Mixed,
+    required: true
+  },
   chainOfThought: {
     title: String,
-    clashes: [ClashSchema]
+    clashes: [{
+      id: String,
+      title: String,
+      weight: Number,
+      winner: String,
+      summary: String
+    }]
   },
   detailedFeedback: {
     replySpeeches: {
-      proposition: ReplySpeechSchema,
-      opposition: ReplySpeechSchema
+      proposition: {
+        speaker: String,
+        score: Number,
+        summary: String
+      },
+      opposition: {
+        speaker: String,
+        score: Number,
+        summary: String
+      }
     },
-    speakers: [SpeakerSchema]
+    speakers: [{
+      name: String,
+      team: String,
+      scores: {
+        matter: Number,
+        manner: Number,
+        method: Number,
+        total: Number
+      },
+      roleFulfillment: String,
+      rhetoricalAnalysis: String,
+      timestampedComments: [{
+        time: String,
+        comment: String
+      }]
+    }]
   }
-}, { timestamps: true });
+}, {
+  timestamps: true
+});
 
-export default mongoose.model('Adjudication', AdjudicationSchema);
+const Adjudication = mongoose.model('Adjudication', adjudicationSchema);
+export default Adjudication;
