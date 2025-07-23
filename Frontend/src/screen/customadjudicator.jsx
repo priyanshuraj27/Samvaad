@@ -139,7 +139,7 @@ const CustomAdjudicator = () => {
       
       // Validate the file
       if (!validateFile(file)) {
-        return; // Error is already set by validateFile
+        return; 
       }
       
       // For text files, read content to verify it's not empty
@@ -435,7 +435,7 @@ const CustomAdjudicator = () => {
                           </p>
                       </div>
                       <a 
-                        href={`/adjudicatication/${result._id}`} 
+                        href={`/adjudication/${result._id}`} 
                         className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
                       >
                           View Full Feedback

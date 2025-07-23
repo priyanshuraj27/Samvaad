@@ -3,7 +3,6 @@ import { BarChart3, Swords, Target, BrainCircuit, BookOpen, ChevronRight, Award,
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../utils/axiosInstance';
 
-// --- DATA CONSTANTS (Unchanged) ---
 const LEVELS = [
     { level: 1, name: "Novice Debater", xpRequired: 0 }, { level: 2, name: "Rising Speaker", xpRequired: 100 },
     { level: 3, name: "Argument Apprentice", xpRequired: 250 }, { level: 4, name: "Reasoning Rookie", xpRequired: 400 },
@@ -17,7 +16,6 @@ const LEVELS = [
     { level: 19, name: "Grandmaster Debater", xpRequired: 8650 }, { level: 20, name: "Legendary Orator", xpRequired: 9600 },
 ];
 
-// --- REUSABLE COMPONENTS (Redesigned) ---
 const InfoCard = ({ children, className = '', ...props }) => (
     <div 
         className={`bg-slate-800/70 backdrop-blur-xl p-6 rounded-2xl border border-slate-700/50 shadow-lg transition-all duration-300 hover:border-slate-600 ${className}`}
@@ -42,7 +40,6 @@ const ShortcutCard = ({ icon, label, onClick }) => {
     );
 };
 
-// --- MODAL COMPONENT (Redesigned) ---
 const LevelsModal = ({ isOpen, onClose, levels, currentLevel }) => {
     if (!isOpen) return null;
 
@@ -119,8 +116,7 @@ const Dashboard = () => {
         };
         fetchData();
     }, []);
-    
-    // --- UI LOGIC (Unchanged) ---
+
     if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading Dashboard...</div>;
     if (error) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-red-400">{error}</div>;
 
@@ -222,7 +218,7 @@ const Dashboard = () => {
                         <InfoCard>
                             <h3 className="font-bold text-lg text-slate-200 mb-4">Quick Actions</h3>
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4">
-                               <ShortcutCard icon={Gavel} label="Adjudicate" onClick={handleNavigation('/debate-adjudicator')} />
+                               <ShortcutCard icon={Gavel} label="Adjudicate" onClick={handleNavigation('/custom-adjudicator')} />
                                <ShortcutCard icon={Users} label="1v1 Debate" onClick={handleNavigation('/debate/1v1')} />
                                <ShortcutCard icon={Target} label="Practice Rebuttal" onClick={handleNavigation('/practice/rebuttals')} />
                                <ShortcutCard icon={BarChart3} label="Analytics" onClick={handleNavigation('/analytics')} />

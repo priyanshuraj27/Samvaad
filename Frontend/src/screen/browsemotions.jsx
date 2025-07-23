@@ -2,16 +2,11 @@ import React, { useState, useMemo, Fragment } from 'react';
 import { Search, Zap, BookCopy, Shuffle, X, ChevronDown, Check, ChevronRight, ArrowLeft } from 'lucide-react';
 import { Menu, Transition } from '@headlessui/react';
 import { useNavigate } from 'react-router-dom';
-
-// --- Main App Component (for standalone demonstration) ---
 export default function App() {
-    // This is a mock Router to make useNavigate work. In your actual app, 
-    // you would have your <BrowserRouter> at a higher level.
     const MockRouter = ({ children }) => {
         const navigate = (path, options) => {
             console.log(`Navigating to ${path}`, options || '');
         };
-        // This is a simplified context provider for demonstration
         const NavigationContext = React.createContext(null);
         return <NavigationContext.Provider value={{ navigate }}>{children}</NavigationContext.Provider>;
     };
@@ -22,8 +17,6 @@ export default function App() {
     );
 }
 
-
-// --- DATA & CONFIG ---
 const allMotions = [
     { id: 1, text: "This house would implement a universal basic income.", category: 'Economics', difficulty: 'Intermediate' },
     { id: 2, text: "This house believes that artificial intelligence poses an existential threat to humanity.", category: 'Technology & AI', difficulty: 'Advanced' },
@@ -84,8 +77,6 @@ const FilterDropdown = ({ options, selected, setSelected, label }) => (
         </Transition>
     </Menu>
 );
-
-// --- MAIN COMPONENT ---
 const BrowseMotions = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
@@ -110,8 +101,6 @@ const BrowseMotions = () => {
     };
 
     const handleDebate = (motionText) => {
-        // Navigate to the debate page, passing the motion text.
-        // The debate page component would need to use useLocation() to receive this state.
         navigate('/debate/1v1', { state: { motion: motionText } });
     };
 

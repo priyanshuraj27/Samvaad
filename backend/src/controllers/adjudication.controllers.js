@@ -10,6 +10,12 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 
+// Validate API key on startup
+if (!process.env.GEMINI_API_KEY) {
+  console.error('GEMINI_API_KEY environment variable is not set');
+  throw new Error('GEMINI_API_KEY is required');
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const PROMPT_1 = `You are an adjudicator for a formal parliamentary debate (Asian/BP/World Schools format).
@@ -164,6 +170,100 @@ const validateFile = (file) => {
   return fileType;
 };
 
+// Enhanced error handling for AI requests
+const makeAIRequest = async (prompt, transcriptText, retries = 3) => {
+  const model = genAI.getGenerativeModel({ 
+    model: 'gemini-2.0-flash',
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    }
+  });
+
+  const cleanMarkdownJson = (text) => {
+    const cleaned = text
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```$/, '')
+      .trim();
+    return cleaned;
+  };
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`AI Request attempt ${attempt}/${retries}`);
+      
+      // Add timeout to the request
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout after 60 seconds')), 60000);
+      });
+
+      const requestPromise = (async () => {
+        const chat = model.startChat({
+          history: [],
+        });
+        
+        await chat.sendMessage(prompt);
+        const result = await chat.sendMessage(transcriptText);
+        return result.response.text().trim();
+      })();
+
+      const rawText = await Promise.race([requestPromise, timeoutPromise]);
+
+      try {
+        const jsonResponse = JSON.parse(cleanMarkdownJson(rawText));
+        console.log(`AI Request successful on attempt ${attempt}`);
+        return jsonResponse;
+      } catch (parseErr) {
+        console.error(`JSON Parse error on attempt ${attempt}:`, parseErr);
+        console.error("AI returned invalid JSON:\n", rawText.substring(0, 500));
+        
+        if (attempt === retries) {
+          throw new ApiError(500, `AI response was not valid JSON after ${retries} attempts: ${rawText.substring(0, 200)}...`);
+        }
+        continue;
+      }
+
+    } catch (error) {
+      console.error(`AI Request error on attempt ${attempt}:`, error);
+      
+      // Check for specific error types
+      if (error.message?.includes('API key')) {
+        throw new ApiError(500, 'Invalid or missing API key. Please check your GEMINI_API_KEY configuration.');
+      }
+      
+      if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
+        throw new ApiError(429, 'API rate limit exceeded. Please try again later.');
+      }
+      
+      if (error.message?.includes('timeout')) {
+        console.log(`Request timed out on attempt ${attempt}`);
+        if (attempt === retries) {
+          throw new ApiError(504, 'AI service is taking too long to respond. Please try again later.');
+        }
+        // Wait before retrying on timeout
+        await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+        continue;
+      }
+      
+      if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        console.log(`Network error on attempt ${attempt}:`, error.message);
+        if (attempt === retries) {
+          throw new ApiError(503, 'Unable to connect to AI service. Please check your internet connection and try again.');
+        }
+        // Wait before retrying on network error
+        await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+        continue;
+      }
+      
+      // For other errors, don't retry
+      if (attempt === retries) {
+        throw new ApiError(500, `AI service error: ${error.message}`);
+      }
+    }
+  }
+};
+
 export const createAdjudication = asyncHandler(async (req, res) => {
   const { sessionId } = req.body;
   const session = await DebateSession.findById(sessionId);
@@ -178,50 +278,37 @@ export const createAdjudication = asyncHandler(async (req, res) => {
     entry => `[${entry.speaker}] (${entry.type} @ ${entry.timestamp}): ${entry.text}`
   ).join('\n');
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  if (!transcriptText.trim()) {
+    throw new ApiError(400, 'Debate session has no transcript data');
+  }
 
-  const cleanMarkdownJson = (text) => {
-    const cleaned = text
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```$/, '')
-      .trim();
-    return cleaned;
-  };
+  console.log('Starting AI adjudication for session:', sessionId);
+  console.log('Transcript length:', transcriptText.length, 'characters');
 
-  const getJson = async (prompt) => {
-    const chat = model.startChat({
-      history: [],
-      generationConfig: { temperature: 0.7 },
+  try {
+    const part1 = await makeAIRequest(PROMPT_1, transcriptText);
+    const part2 = await makeAIRequest(PROMPT_2, transcriptText);
+    const part3 = await makeAIRequest(PROMPT_3, transcriptText);
+
+    const adjudication = await Adjudication.create({
+      session: session._id,
+      adjudicator,
+      formatName,
+      ...part1,
+      ...part2,
+      ...part3,
     });
-    await chat.sendMessage(prompt);
-    const result = await chat.sendMessage(transcriptText); 
-    const rawText = result.response.text().trim();
 
-    try {
-      return JSON.parse(cleanMarkdownJson(rawText));
-    } catch (err) {
-      console.error("AI returned invalid JSON:\n", rawText);
-      throw new ApiError(500, `AI response was not valid JSON: ${rawText}`);
-    }
-  };
+    console.log('Adjudication created successfully for session:', sessionId);
 
-  const part1 = await getJson(PROMPT_1);
-  const part2 = await getJson(PROMPT_2);
-  const part3 = await getJson(PROMPT_3);
+    return res
+      .status(201)
+      .json(new ApiResponse(201, "Adjudication created", adjudication));
 
-  const adjudication = await Adjudication.create({
-    session: session._id,
-    adjudicator,
-    formatName,
-    ...part1,
-    ...part2,
-    ...part3,
-  });
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, "Adjudication created", adjudication));
+  } catch (error) {
+    console.error('Error in createAdjudication:', error);
+    throw error;
+  }
 });
 
 export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
@@ -269,38 +356,11 @@ export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
       throw new ApiError(400, 'The uploaded file appears to be empty or contains no readable text');
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-    const cleanMarkdownJson = (text) => {
-      const cleaned = text
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/```$/, '')
-        .trim();
-      return cleaned;
-    };
-
-    const getJson = async (prompt) => {
-      const chat = model.startChat({
-        history: [],
-        generationConfig: { temperature: 0.7 },
-      });
-      await chat.sendMessage(prompt);
-      const result = await chat.sendMessage(transcriptText); 
-      const rawText = result.response.text().trim();
-
-      try {
-        return JSON.parse(cleanMarkdownJson(rawText));
-      } catch (err) {
-        console.error("AI returned invalid JSON:\n", rawText);
-        throw new ApiError(500, `AI response was not valid JSON: ${rawText}`);
-      }
-    };
-
-    console.log('Starting AI adjudication process...');
-    const part1 = await getJson(PROMPT_1);
-    const part2 = await getJson(PROMPT_2);
-    const part3 = await getJson(PROMPT_3);
+    console.log('Starting AI adjudication process for uploaded file...');
+    
+    const part1 = await makeAIRequest(PROMPT_1, transcriptText);
+    const part2 = await makeAIRequest(PROMPT_2, transcriptText);
+    const part3 = await makeAIRequest(PROMPT_3, transcriptText);
 
     const adjudication = await Adjudication.create({
       session: null,
@@ -315,7 +375,7 @@ export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
       ...part3,
     });
 
-    console.log('Adjudication created successfully');
+    console.log('Adjudication created successfully for uploaded file');
 
     return res
       .status(201)
