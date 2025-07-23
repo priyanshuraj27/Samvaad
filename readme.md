@@ -2,6 +2,10 @@
 
 <div align="center">
 
+<a href="https://samvaad-frontend-delta.vercel.app/" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.shields.io/badge/Live%20Demo-Click%20Here-blue?style=for-the-badge" alt="Live Demo" />
+</a>
+
 **The Ultimate AI-Powered Multilingual Debate Platform**
 
 *Empowering debaters worldwide with intelligent adjudication, real-time translation, and competitive debate simulation*
