@@ -236,7 +236,7 @@ const DebateScreen = () => {
                     <p className="text-gray-400 mt-2">Configure your debate and prepare for victory.</p>
                 </div>
 
-                {/* Step 1: Motion */}
+                {/* Step 1: Motionr */}
                 <SectionWrapper step="1" title="Select Your Motion" icon={BookOpen}>
                     <div className="flex flex-col md:flex-row items-center gap-4 mb-4">
                         <button onClick={() => navigate('/browse-motions')} className="w-full md:w-auto flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 flex items-center justify-center gap-2">
