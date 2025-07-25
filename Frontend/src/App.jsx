@@ -15,6 +15,7 @@ import ProfilePage from './screen/profile'
 import CustomAdjudicator from './screen/customadjudicator'
 import OneVOneDebate from './screen/onevonedebate'
 import RebuttalTrainer from './screen/rebuttaltrainer'
+import DebateAnalyticsPage from './screen/analytic'
 // Import BrowserRouter, Routes, and Route
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
@@ -37,6 +38,7 @@ function App() {
         <Route path="/adjudication/:id" element={<Adjudicator />} />
         <Route path="/debate/1v1" element={<OneVOneDebate />} />
         <Route path="/practice/rebuttals" element={<RebuttalTrainer />} />
+        <Route path="/analytics" element={<DebateAnalyticsPage />} />
         {/* Add more routes as needed */}
       </Routes>
     </Router>

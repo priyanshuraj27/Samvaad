@@ -231,10 +231,10 @@ const Dashboard = () => {
                             <h3 className="font-bold text-lg text-slate-200 mb-4">Recent Activity</h3>
                             <div className="space-y-2">
                                 {recentDebates.length > 0 ? recentDebates.map((debate, index) => (
-                                    <div key={debate._id || index} className="flex justify-between items-center group cursor-pointer p-3 -m-3 rounded-lg hover:bg-slate-700/50" onClick={handleNavigation(`/debate/${debate._id}`)}>
-                                        <div>
-                                            <p className="font-semibold text-slate-300 truncate pr-4">{debate.motion}</p>
-                                            <p className="text-sm text-slate-400">
+                                    <div key={debate._id || index} className="flex items-center gap-3 group cursor-pointer p-3 -m-3 rounded-lg hover:bg-slate-700/50" onClick={handleNavigation(`/debate/${debate._id}`)}>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-300 truncate" title={debate.motion}>{debate.motion}</p>
+                                            <p className="text-sm text-slate-400 truncate">
                                                 {debate.debateType}
                                                 {debate.score !== undefined && ` • ${debate.score} pts`}
                                             </p>

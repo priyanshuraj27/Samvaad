@@ -61,7 +61,7 @@ const ProfilePage = () => {
   const handleLogout = async () => {
     try {
       await axiosInstance.post('/users/logout');
-      window.location.href = '/login';
+      window.location.href = '/';
     } catch (err) {
       console.error("Logout failed", err);
       alert("Logout failed. Please try again.");
